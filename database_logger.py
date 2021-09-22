@@ -24,6 +24,7 @@ AsyncIO instead of threads to scale and outputs data to a MQTT broker.
 """
 
 import asyncio
+from contextlib import AsyncExitStack, asynccontextmanager
 import os
 import logging
 import signal
@@ -156,11 +157,11 @@ class DatabaseLogger():
                 sig, lambda: asyncio.create_task(self.shutdown()))
 
         # Read either environment variable, settings.ini or .env file
-        mqtt_host = config('MQTT_HOST', default="localhost")
+        mqtt_host = config('MQTT_HOST')
         mqtt_port = config('MQTT_PORT', cast=int, default=1883)
 
         database_config = {
-            'hostname': config('DATABASE_HOST', default="localhost"),
+            'hostname': config('DATABASE_HOST'),
             'port': config('DATABASE_PORT', cast=int, default=5432),
             'username': config('DATABASE_USER'),
             'password': config('DATABASE_PASSWORD'),
