@@ -60,7 +60,7 @@ def module_path():
 
 
 POSTGRES_STMS = {
-    'insert_data': "INSERT INTO sensor_data_test (time ,sensor_id ,value) VALUES (NOW(), (SELECT id FROM sensors WHERE uuid=$1 and sid=$2 and enabled), $3)",
+    'insert_data': "INSERT INTO sensor_data_test (time ,sensor_id ,value) VALUES (NOW(), (SELECT id FROM sensors WHERE uuid=$1 and sensor_sid=$2 and enabled), $3)",
 }
 
 
