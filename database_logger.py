@@ -27,6 +27,7 @@ import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
 import os
 import logging
+import re   # Used to parse exceptions
 import signal
 import sys
 from uuid import UUID
@@ -59,7 +60,7 @@ def module_path():
 
 
 POSTGRES_STMS = {
-    'insert_data': "INSERT INTO sensor_data_test (time ,sensor_id ,value) VALUES (NOW(), (SELECT id FROM sensors WHERE uuid=$1 and enabled), $2)",
+    'insert_data': "INSERT INTO sensor_data_test (time ,sensor_id ,value) VALUES (NOW(), (SELECT id FROM sensors WHERE uuid=$1 and sid=$2 and enabled), $3)",
 }
 
 
@@ -83,39 +84,62 @@ class DatabaseLogger():
         finally:
             await conn.close()
 
-    async def mqtt_producer(self, mqtt_host, mqtt_port, output_queue):
-        async with AsyncExitStack() as stack:
-            # Keep track of the asyncio tasks that we create, so that
-            # we can cancel them on exit
-            tasks = set()
-            stack.push_async_callback(self.cancel_tasks, tasks)
+    async def mqtt_producer(self, mqtt_host, mqtt_port, output_queue, reconnect_interval=3):
+        while "not connected":
+            try:
+                async with AsyncExitStack() as stack:
+                    # Keep track of the asyncio tasks that we create, so that
+                    # we can cancel them on exit
+                    tasks = set()
+                    stack.push_async_callback(self.cancel_tasks, tasks)
 
-            # Connect to the MQTT broker
-            self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
-            client = asyncio_mqtt.Client(hostname=mqtt_host, port=mqtt_port)
-            await stack.enter_async_context(client)
+                    # Connect to the MQTT broker
+                    self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
+                    client = asyncio_mqtt.Client(hostname=mqtt_host, port=mqtt_port, clean_session=False, client_id='beholder_datalogger')
+                    await stack.enter_async_context(client)
 
-            # You can create any number of topic filters
-            topic_filters = (
-                "sensors/+/+/+",
-            )
-            for topic_filter in topic_filters:
-                # Log all messages that matches the filter
-                manager = client.filtered_messages(topic_filter)
-                messages = await stack.enter_async_context(manager)
-                task = asyncio.create_task(self.log_messages(messages, output_queue))
-                tasks.add(task)
+                    # You can create any number of topic filters
+                    topic_filters = (
+                        "sensors/+/+/+",
+                    )
+                    for topic_filter in topic_filters:
+                        # Log all messages that matches the filter
+                        manager = client.filtered_messages(topic_filter)
+                        messages = await stack.enter_async_context(manager)
+                        task = asyncio.create_task(self.log_messages(messages, output_queue))
+                        tasks.add(task)
 
-            # Messages that doesn't match a filter will get logged here
-            messages = await stack.enter_async_context(client.unfiltered_messages())
-            task = asyncio.create_task(self.log_messages(messages, output_queue))
-            tasks.add(task)
+                    # Messages that doesn't match a filter will get logged here
+                    messages = await stack.enter_async_context(client.unfiltered_messages())
+                    task = asyncio.create_task(self.log_messages(messages, output_queue))
+                    tasks.add(task)
 
-            await client.subscribe("sensors/#")
+                    await client.subscribe("sensors/#", qos=2)
 
-            # Wait for everything to complete (or fail due to, e.g., network
-            # errors)
-            await asyncio.gather(*tasks)
+                    # Wait for everything to complete (or fail due to, e.g., network
+                    # errors)
+                    await asyncio.gather(*tasks)
+            except asyncio_mqtt.error.MqttCodeError as exc:
+                # The paho mqtt errorcodes can be found here:
+                # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
+                # and here (bottom):
+                # https://github.com/sbtinstruments/asyncio-mqtt/blob/master/asyncio_mqtt/error.py
+                # reason_code = exc.rc
+                await asyncio.sleep(reconnect_interval)
+            except ConnectionRefusedError:
+                self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
+                await asyncio.sleep(reconnect_interval)
+            except asyncio_mqtt.error.MqttError as exc:
+                x = re.search(r"^\[Errno (\d+)\]", str(exc))
+                if x is not None:
+                    errorcode = int(x.group(1))
+                    if errorcode == 111:
+                        self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
+                    else:
+                        self.__logger.exception("Connection error. Retrying.")
+                else:
+                    self.__logger.exception("Connection error. Retrying.")
+                await asyncio.sleep(reconnect_interval)
 
     async def log_messages(self, messages, output_queue):
         async for message in messages:
@@ -132,14 +156,20 @@ class DatabaseLogger():
             ))
             streamer = await stack.enter_async_context(data_stream.stream())
             async for item in streamer:
-                uuid, value = UUID(item['uuid']), item['value']
+                uuid, sid, value = UUID(item['uuid']), item['value'], item['value']
                 try:
-                    await conn.execute(POSTGRES_STMS['insert_data'], uuid, value)
+                    await conn.execute(POSTGRES_STMS['insert_data'], uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
                     # Ignore unknown sensors
                     pass
                 else:
                     print(item)
+
+    async def mqtt_test_consumer(self, input_queue, *args, **kwargs):
+        data_stream = stream.call(input_queue.get) | pipe.cycle()
+        async with data_stream.stream() as streamer:
+            async for item in streamer:
+                print(item)
 
     async def run(self, number_of_publishers=5):
         """
@@ -157,16 +187,20 @@ class DatabaseLogger():
                 sig, lambda: asyncio.create_task(self.shutdown()))
 
         # Read either environment variable, settings.ini or .env file
-        mqtt_host = config('MQTT_HOST')
-        mqtt_port = config('MQTT_PORT', cast=int, default=1883)
+        try:
+            mqtt_host = config('MQTT_HOST')
+            mqtt_port = config('MQTT_PORT', cast=int, default=1883)
 
-        database_config = {
-            'hostname': config('DATABASE_HOST'),
-            'port': config('DATABASE_PORT', cast=int, default=5432),
-            'username': config('DATABASE_USER'),
-            'password': config('DATABASE_PASSWORD'),
-            'database': config('DATABASE_NAME', default="sensors"),
-        }
+            database_config = {
+                'hostname': config('DATABASE_HOST'),
+                'port': config('DATABASE_PORT', cast=int, default=5432),
+                'username': config('DATABASE_USER'),
+                'password': config('DATABASE_PASSWORD'),
+                'database': config('DATABASE_NAME', default="sensors"),
+            }
+        except UndefinedValueError as exc:
+            self.__logger.error("Environment variable undefined: %s", exc)
+            return
 
         async with AsyncExitStack() as stack:
             tasks = set()
