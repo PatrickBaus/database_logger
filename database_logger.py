@@ -156,7 +156,7 @@ class DatabaseLogger():
             ))
             streamer = await stack.enter_async_context(data_stream.stream())
             async for item in streamer:
-                uuid, sid, value = UUID(item['uuid']), item['value'], item['value']
+                uuid, sid, value = UUID(item['uuid']), item['sid'], item['value']
                 try:
                     await conn.execute(POSTGRES_STMS['insert_data'], uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
