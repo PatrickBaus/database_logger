@@ -25,7 +25,7 @@ AsyncIO instead of threads to scale and outputs data to a MQTT broker.
 
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import logging
 import re   # Used to parse exceptions
@@ -61,7 +61,7 @@ def module_path():
 
 
 POSTGRES_STMS = {
-    'insert_data': "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES (NOW(), (SELECT id FROM sensors WHERE uuid=$1 and sensor_sid=$2 and enabled), $3)",
+    'insert_data': "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE uuid=$2 and sensor_sid=$3 and enabled), $4)",
 }
 
 
@@ -157,11 +157,19 @@ class DatabaseLogger():
             ))
             streamer = await stack.enter_async_context(data_stream.stream())
             async for item in streamer:
-                uuid, sid, timestamp, value = UUID(item['uuid']), item['sid'], datetime.fromtimestamp(item['timestamp']), item['value']
                 try:
-                    await conn.execute(POSTGRES_STMS['insert_data'], uuid, sid, value)
+                    timestamp = datetime.fromtimestamp(float(item['timestamp']), timezone.utc))
+                except (OverflowError, OSError):
+                    # If there is a conversion error, we will use the current timestamp instead
+                    timestamp = datetime.now(timezone.utc)
+                uuid, sid, value = UUID(item['uuid']), item['sid'], item['value']
+                try:
+                    await conn.execute(POSTGRES_STMS['insert_data'], timestamp, uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
                     # Ignore unknown sensors
+                    pass
+                except asyncpg.exceptions.UniqueViolationError:
+                    # Drop duplicate entries
                     pass
                 else:
                     print(item)
