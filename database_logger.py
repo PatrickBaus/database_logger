@@ -61,7 +61,7 @@ def module_path():
 
 
 POSTGRES_STMS = {
-    'insert_data': "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE uuid=$2 and sensor_sid=$3 and enabled), $4)",
+    'insert_data': "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES (NOW(), (SELECT id FROM sensors WHERE uuid=$1 and sensor_sid=$2 and enabled), $3)",
 }
 
 
@@ -159,7 +159,7 @@ class DatabaseLogger():
             async for item in streamer:
                 uuid, sid, timestamp, value = UUID(item['uuid']), item['sid'], datetime.fromtimestamp(item['timestamp']), item['value']
                 try:
-                    await conn.execute(POSTGRES_STMS['insert_data'], timestamp, uuid, sid, value)
+                    await conn.execute(POSTGRES_STMS['insert_data'], uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
                     # Ignore unknown sensors
                     pass
