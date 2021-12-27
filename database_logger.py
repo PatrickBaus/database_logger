@@ -158,7 +158,7 @@ class DatabaseLogger():
             streamer = await stack.enter_async_context(data_stream.stream())
             async for item in streamer:
                 try:
-                    timestamp = datetime.fromtimestamp(float(item['timestamp']), timezone.utc))
+                    timestamp = datetime.fromtimestamp(float(item['timestamp']), timezone.utc)
                 except (OverflowError, OSError):
                     # If there is a conversion error, we will use the current timestamp instead
                     timestamp = datetime.now(timezone.utc)
