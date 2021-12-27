@@ -25,6 +25,7 @@ AsyncIO instead of threads to scale and outputs data to a MQTT broker.
 
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
+from datetime import datetime
 import os
 import logging
 import re   # Used to parse exceptions
@@ -156,7 +157,7 @@ class DatabaseLogger():
             ))
             streamer = await stack.enter_async_context(data_stream.stream())
             async for item in streamer:
-                uuid, sid, timestamp, value = UUID(item['uuid']), item['sid'], item['timestamp'], item['value']
+                uuid, sid, timestamp, value = UUID(item['uuid']), item['sid'], datetime.fromtimestamp(item['timestamp']), item['value']
                 try:
                     await conn.execute(POSTGRES_STMS['insert_data'], timestamp, uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
