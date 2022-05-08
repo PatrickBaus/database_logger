@@ -162,7 +162,12 @@ class DatabaseLogger():
                 except (OverflowError, OSError):
                     # If there is a conversion error, we will use the current timestamp instead
                     timestamp = datetime.now(timezone.utc)
-                uuid, sid, value = UUID(item['uuid']), item['sid'], item['value']
+                try:
+                    uuid, sid, value = UUID(item['uuid']), item.get('sid', 0), item['value']
+                except (KeyError, ValueError):
+                    self.__logger.info("Invalid data recieved (%s). Dropping it.", item)
+                    # ignore invalid entrys
+                    continue
                 try:
                     await conn.execute(POSTGRES_STMS['insert_data'], timestamp, uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
