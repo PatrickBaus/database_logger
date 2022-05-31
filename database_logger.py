@@ -176,7 +176,7 @@ class DatabaseLogger():
                 except asyncpg.exceptions.UniqueViolationError:
                     # Drop duplicate entries
                     pass
-                except TypeError:
+                except asyncpg.exceptions.DataError:
                     self.__logger.info("Invalid data recieved (%s). Dropping it.", item)
                 else:
                     print(item)
