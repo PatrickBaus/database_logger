@@ -18,16 +18,14 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 """
-Kraken is a sensor data aggregation tool for distributed sensors arrays. It uses
-AsyncIO instead of threads to scale and outputs data to a MQTT broker.
+This is a demo logger for the Kraken sensor system. It connects to the MQTT broker and pushes all data from data sources,
+that are configured to a database.
 """
 
 import asyncio
 import logging
-import os
 import re  # Used to parse exceptions
 import signal
-import sys
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
@@ -37,27 +35,9 @@ import asyncio_mqtt
 import asyncpg
 import simplejson as json
 from aiostream import pipe, stream
-from decouple import config
+from decouple import UndefinedValueError, config
 
 from _version import __version__
-
-
-def we_are_frozen():
-    """Returns whether we are frozen via py2exe.
-    This will affect how we find out where we are located."""
-
-    return hasattr(sys, "frozen")
-
-
-def module_path():
-    """This will get us the program's directory,
-    even if we are frozen using py2exe"""
-
-    if we_are_frozen():
-        return os.path.dirname(sys.executable)
-
-    return os.path.dirname(__file__)
-
 
 POSTGRES_STMS = {
     "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE uuid=$2 and sensor_sid=$3 and enabled), $4)",
@@ -66,9 +46,7 @@ POSTGRES_STMS = {
 
 class DatabaseLogger:
     """
-    Main daemon, that runs in the background and monitors all sensors. It will
-    configure them according to options set in the database and then place the
-    returned data in the database as well.
+    The database logger connects to the MQTT broker and pushes all data to the database.
     """
 
     def __init__(self):
@@ -78,8 +56,8 @@ class DatabaseLogger:
         self.__logger = logging.getLogger(__name__)
 
     @asynccontextmanager
-    async def database_connector(self, hostname, port, username, password, database):
-        conn = await asyncpg.connect(user=username, password=password, database=database, host=hostname)
+    async def database_connector(self, hostname: str, port: int, username: str, password: str, database: str):
+        conn = await asyncpg.connect(user=username, password=password, database=database, host=hostname, port=port)
         try:
             yield conn
         finally:
@@ -120,7 +98,7 @@ class DatabaseLogger:
                     # Wait for everything to complete (or fail due to, e.g., network
                     # errors)
                     await asyncio.gather(*tasks)
-            except asyncio_mqtt.error.MqttCodeError as exc:
+            except asyncio_mqtt.error.MqttCodeError:
                 # The paho mqtt errorcodes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
@@ -131,9 +109,9 @@ class DatabaseLogger:
                 self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
                 await asyncio.sleep(reconnect_interval)
             except asyncio_mqtt.error.MqttError as exc:
-                x = re.search(r"^\[Errno (\d+)\]", str(exc))
-                if x is not None:
-                    errorcode = int(x.group(1))
+                error = re.search(r"^\[Errno (\d+)\]", str(exc))
+                if error is not None:
+                    errorcode = int(error.group(1))
                     if errorcode == 111:
                         self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
                     else:
@@ -179,7 +157,7 @@ class DatabaseLogger:
                 else:
                     print(item)
 
-    async def mqtt_test_consumer(self, input_queue, *args, **kwargs):
+    async def mqtt_test_consumer(self, input_queue, *args, **kwargs):  # pylint: disable=unused-argument  # Testing only
         data_stream = stream.call(input_queue.get) | pipe.cycle()
         async with data_stream.stream() as streamer:
             async for item in streamer:
@@ -191,7 +169,7 @@ class DatabaseLogger:
         loop. Execute shutdown() to kill it.
         """
         self.__logger.warning("#################################################")
-        self.__logger.warning("Starting Daemon...")
+        self.__logger.warning("Starting Kraken logger v%s...", __version__)
         self.__logger.warning("#################################################")
 
         # Catch signals and shutdown
