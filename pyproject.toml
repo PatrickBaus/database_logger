@@ -1,0 +1,82 @@
+[project]
+name = "kraken_database_logger"
+authors = [
+  { name="Patrick Baus", email="patrick.baus@physik.tu-darmstadt.de" },
+]
+description = "Python 3 Kraken database logger demo"
+readme = "README.md"
+license = { text="GNU General Public License v3 (GPLv3)" }
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Topic :: Home Automation",
+]
+keywords = ["IoT",]
+dependencies = [
+    "typing-extensions; python_version <'3.11'",
+    "aiostream ~= 0.4.4",
+    "asyncio-mqtt ~= 0.12.1",
+    "asyncpg ~= 0.26.0",
+    "python-decouple ~= 3.6",
+    "simplejson ~= 3.17.6",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/PatrickBaus/database_logger"
+"Bug Tracker" = "https://github.com/PatrickBaus/database_logger/issues"
+"Download" = "https://github.com/PatrickBaus/database_logger/releases"
+
+[project.optional-dependencies]
+dev = [
+    "black", "build", "isort", "mypy", "pre-commit", "pylint", "types-simplejson",
+]
+
+test = [
+    "mypy", "pylint", "types-simplejson",
+]
+
+[tool.pylint.'MESSAGES CONTROL']
+max-line-length = 120
+
+[tool.pylint.'MISCELLANEOUS']
+notes = ["FIXME", "XXX",]
+
+[tool.isort]
+line_length = 120
+profile = "black"
+
+[tool.black]
+line-length = 120
+
+[tool.pytest.ini_options]
+markers = [
+    # conftest.py reorders tests moving slow ones to the end of the list
+    "slow",
+]
+
+[build-system]
+requires = [
+    "setuptools>=61.0",
+    "typing-extensions; python_version <'3.11'",
+    "aiostream ~= 0.4.4",
+    "asyncio-mqtt ~= 0.12.1",
+    "asyncpg ~= 0.26.0",
+    "python-decouple ~= 3.6",
+    "simplejson ~= 3.17.6",
+    "types-simplejson"
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "_version.__version__"}
