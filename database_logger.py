@@ -18,8 +18,8 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 """
-This is a demo logger for the Kraken sensor system. It connects to the MQTT broker and pushes all data from data sources,
-that are configured to a database.
+This is a demo logger for the Kraken sensor system. It connects to the MQTT broker and pushes all data from data
+sources, that are configured, into a database.
 """
 
 import asyncio
@@ -40,7 +40,8 @@ from decouple import UndefinedValueError, config
 from _version import __version__
 
 POSTGRES_STMS = {
-    "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE uuid=$2 and sensor_sid=$3 and enabled), $4)",
+    "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE"
+    " uuid=$2 and sensor_sid=$3 and enabled), $4)",
 }
 
 
@@ -63,7 +64,7 @@ class DatabaseLogger:
         finally:
             await conn.close()
 
-    async def mqtt_producer(self, mqtt_host, mqtt_port, output_queue, reconnect_interval=3):
+    async def mqtt_producer(self, mqtt_host: str, mqtt_port: int, output_queue, reconnect_interval: float = 3):
         while "not connected":
             try:
                 async with AsyncExitStack() as stack:
@@ -82,7 +83,7 @@ class DatabaseLogger:
                     # You can create any number of topic filters
                     topic_filters = ("sensors/+/+/+",)
                     for topic_filter in topic_filters:
-                        # Log all messages that matches the filter
+                        # Log all messages that match the filter
                         manager = client.filtered_messages(topic_filter)
                         messages = await stack.enter_async_context(manager)
                         task = asyncio.create_task(self.log_messages(messages, output_queue))
@@ -120,7 +121,8 @@ class DatabaseLogger:
                     self.__logger.exception("Connection error. Retrying.")
                 await asyncio.sleep(reconnect_interval)
 
-    async def log_messages(self, messages, output_queue):
+    @staticmethod
+    async def log_messages(messages, output_queue):
         async for message in messages:
             payload = message.payload.decode()
             event = json.loads(payload, use_decimal=True)
@@ -157,13 +159,14 @@ class DatabaseLogger:
                 else:
                     print(item)
 
-    async def mqtt_test_consumer(self, input_queue, *args, **kwargs):  # pylint: disable=unused-argument  # Testing only
+    @staticmethod
+    async def mqtt_test_consumer(input_queue, *args, **kwargs):  # pylint: disable=unused-argument  # Testing only
         data_stream = stream.call(input_queue.get) | pipe.cycle()
         async with data_stream.stream() as streamer:
             async for item in streamer:
                 print(item)
 
-    async def run(self, number_of_publishers=5):
+    async def run(self, number_of_publishers: int = 5):
         """
         Start the daemon and keep it running through the while (True)
         loop. Execute shutdown() to kill it.
@@ -200,7 +203,7 @@ class DatabaseLogger:
 
             consumers = {
                 asyncio.create_task(self.mqtt_consumer(message_queue, database_config))
-                for i in range(number_of_publishers)
+                for _ in range(number_of_publishers)
             }
             tasks.update(consumers)
 
@@ -232,7 +235,8 @@ class DatabaseLogger:
             # The exception will then be printed using the logger
             self.__logger.exception("Error while reaping tasks during shutdown")
 
-    async def cancel_tasks(self, tasks):
+    @staticmethod
+    async def cancel_tasks(tasks):
         for task in tasks:
             if task.done():
                 continue
