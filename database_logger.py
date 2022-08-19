@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 # Copyright (C) 2021  Patrick Baus
@@ -24,21 +23,21 @@ AsyncIO instead of threads to scale and outputs data to a MQTT broker.
 """
 
 import asyncio
-from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import datetime, timezone
-import os
 import logging
-import re   # Used to parse exceptions
+import os
+import re  # Used to parse exceptions
 import signal
 import sys
-from uuid import UUID
 import warnings
+from contextlib import AsyncExitStack, asynccontextmanager
+from datetime import datetime, timezone
+from uuid import UUID
 
-from aiostream import stream, pipe
-import asyncpg
 import asyncio_mqtt
-from decouple import config
+import asyncpg
 import simplejson as json
+from aiostream import pipe, stream
+from decouple import config
 
 from _version import __version__
 
@@ -51,7 +50,7 @@ def we_are_frozen():
 
 
 def module_path():
-    """ This will get us the program's directory,
+    """This will get us the program's directory,
     even if we are frozen using py2exe"""
 
     if we_are_frozen():
@@ -61,16 +60,17 @@ def module_path():
 
 
 POSTGRES_STMS = {
-    'insert_data': "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE uuid=$2 and sensor_sid=$3 and enabled), $4)",
+    "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE uuid=$2 and sensor_sid=$3 and enabled), $4)",
 }
 
 
-class DatabaseLogger():
+class DatabaseLogger:
     """
     Main daemon, that runs in the background and monitors all sensors. It will
     configure them according to options set in the database and then place the
     returned data in the database as well.
     """
+
     def __init__(self):
         """
         Creates a sensorDaemon object.
@@ -96,13 +96,13 @@ class DatabaseLogger():
 
                     # Connect to the MQTT broker
                     self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
-                    client = asyncio_mqtt.Client(hostname=mqtt_host, port=mqtt_port, clean_session=False, client_id='beholder_datalogger')
+                    client = asyncio_mqtt.Client(
+                        hostname=mqtt_host, port=mqtt_port, clean_session=False, client_id="beholder_datalogger"
+                    )
                     await stack.enter_async_context(client)
 
                     # You can create any number of topic filters
-                    topic_filters = (
-                        "sensors/+/+/+",
-                    )
+                    topic_filters = ("sensors/+/+/+",)
                     for topic_filter in topic_filters:
                         # Log all messages that matches the filter
                         manager = client.filtered_messages(topic_filter)
@@ -152,24 +152,22 @@ class DatabaseLogger():
         async with AsyncExitStack() as stack:
             data_stream = stream.call(input_queue.get) | pipe.cycle()
             # Need to catch asyncpg.exceptions.InvalidPasswordError
-            conn = await stack.enter_async_context(self.database_connector(
-                **database_config
-            ))
+            conn = await stack.enter_async_context(self.database_connector(**database_config))
             streamer = await stack.enter_async_context(data_stream.stream())
             async for item in streamer:
                 try:
-                    timestamp = datetime.fromtimestamp(float(item['timestamp']), timezone.utc)
+                    timestamp = datetime.fromtimestamp(float(item["timestamp"]), timezone.utc)
                 except (OverflowError, OSError):
                     # If there is a conversion error, we will use the current timestamp instead
                     timestamp = datetime.now(timezone.utc)
                 try:
-                    uuid, sid, value = UUID(item['uuid']), item.get('sid', 0), item['value']
+                    uuid, sid, value = UUID(item["uuid"]), item.get("sid", 0), item["value"]
                 except (KeyError, ValueError):
                     self.__logger.info("Invalid data recieved (%s). Dropping it.", item)
                     # ignore invalid entrys
                     continue
                 try:
-                    await conn.execute(POSTGRES_STMS['insert_data'], timestamp, uuid, sid, value)
+                    await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
                 except asyncpg.exceptions.NotNullViolationError:
                     # Ignore unknown sensors
                     pass
@@ -199,20 +197,19 @@ class DatabaseLogger():
         # Catch signals and shutdown
         signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
         for sig in signals:
-            asyncio.get_running_loop().add_signal_handler(
-                sig, lambda: asyncio.create_task(self.shutdown()))
+            asyncio.get_running_loop().add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
 
         # Read either environment variable, settings.ini or .env file
         try:
-            mqtt_host = config('MQTT_HOST')
-            mqtt_port = config('MQTT_PORT', cast=int, default=1883)
+            mqtt_host = config("MQTT_HOST")
+            mqtt_port = config("MQTT_PORT", cast=int, default=1883)
 
             database_config = {
-                'hostname': config('DATABASE_HOST'),
-                'port': config('DATABASE_PORT', cast=int, default=5432),
-                'username': config('DATABASE_USER'),
-                'password': config('DATABASE_PASSWORD'),
-                'database': config('DATABASE_NAME', default="sensors"),
+                "hostname": config("DATABASE_HOST"),
+                "port": config("DATABASE_PORT", cast=int, default=5432),
+                "username": config("DATABASE_USER"),
+                "password": config("DATABASE_PASSWORD"),
+                "database": config("DATABASE_NAME", default="sensors"),
             }
         except UndefinedValueError as exc:
             self.__logger.error("Environment variable undefined: %s", exc)
@@ -223,7 +220,10 @@ class DatabaseLogger():
             stack.push_async_callback(self.cancel_tasks, tasks)
             message_queue = asyncio.Queue()
 
-            consumers = {asyncio.create_task(self.mqtt_consumer(message_queue, database_config)) for i in range(number_of_publishers)}
+            consumers = {
+                asyncio.create_task(self.mqtt_consumer(message_queue, database_config))
+                for i in range(number_of_publishers)
+            }
             tasks.update(consumers)
 
             # Start the MQTT producer
@@ -243,13 +243,13 @@ class DatabaseLogger():
         # Get all running tasks
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         # and stop them
-        [task.cancel() for task in tasks]   # pylint: disable=expression-not-assigned
+        [task.cancel() for task in tasks]  # pylint: disable=expression-not-assigned
         # finally wait for them to terminate
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             pass
-        except Exception:   # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except
             # We want to catch all exceptions on shutdown, except the asyncio.CancelledError
             # The exception will then be printed using the logger
             self.__logger.exception("Error while reaping tasks during shutdown")
@@ -279,11 +279,11 @@ async def main():
 
 
 # Report all mistakes managing asynchronous resources.
-warnings.simplefilter('always', ResourceWarning)
+warnings.simplefilter("always", ResourceWarning)
 logging.basicConfig(
-    format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
-    level=logging.INFO,    # Enable logs from the ip connection. Set to debug for even more info
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
+    level=logging.INFO,  # Enable logs from the ip connection. Set to debug for even more info
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 asyncio.run(main(), debug=True)

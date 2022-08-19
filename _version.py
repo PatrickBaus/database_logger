@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Database reader version information.
 """
