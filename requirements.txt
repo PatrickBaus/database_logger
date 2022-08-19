@@ -1,6 +1,5 @@
-aiostream==0.4.3
-asyncio-mqtt==0.10.0
-asyncpg==0.24.0
-paho-mqtt==1.5.1
-python-decouple==3.4
-simplejson==3.17.5
+aiostream==0.4.4
+asyncio-mqtt==0.12.1
+asyncpg==0.26.0
+python-decouple==3.6
+simplejson==3.17.6
