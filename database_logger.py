@@ -65,7 +65,9 @@ class DatabaseLogger:
         finally:
             await conn.close()
 
-    async def mqtt_producer(self, mqtt_host: str, mqtt_port: int, mqtt_client_id: str | None, output_queue, reconnect_interval: float = 3):
+    async def mqtt_producer(
+        self, mqtt_host: str, mqtt_port: int, mqtt_client_id: str | None, output_queue, reconnect_interval: float = 3
+    ):
         while "not connected":
             try:
                 async with AsyncExitStack() as stack:
@@ -198,6 +200,8 @@ class DatabaseLogger:
             self.__logger.error("Environment variable undefined: %s", exc)
             return
 
+        if mqtt_client_id is not None:
+            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_client_id)
         async with AsyncExitStack() as stack:
             tasks = set()
             stack.push_async_callback(self.cancel_tasks, tasks)
