@@ -68,13 +68,6 @@ markers = [
 [build-system]
 requires = [
     "setuptools>=61.0",
-    "typing-extensions; python_version <'3.11'",
-    "aiostream ~= 0.4.4",
-    "asyncio-mqtt ~= 0.12.1",
-    "asyncpg ~= 0.26.0",
-    "python-decouple ~= 3.6",
-    "simplejson ~= 3.17.6",
-    "types-simplejson"
 ]
 build-backend = "setuptools.build_meta"
 
