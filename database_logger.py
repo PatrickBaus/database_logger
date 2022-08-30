@@ -21,6 +21,7 @@
 This is a demo logger for the Kraken sensor system. It connects to the MQTT broker and pushes all data from data
 sources, that are configured, into a database.
 """
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -64,7 +65,7 @@ class DatabaseLogger:
         finally:
             await conn.close()
 
-    async def mqtt_producer(self, mqtt_host: str, mqtt_port: int, output_queue, reconnect_interval: float = 3):
+    async def mqtt_producer(self, mqtt_host: str, mqtt_port: int, mqtt_client_id: str | None, output_queue, reconnect_interval: float = 3):
         while "not connected":
             try:
                 async with AsyncExitStack() as stack:
@@ -76,7 +77,7 @@ class DatabaseLogger:
                     # Connect to the MQTT broker
                     self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
                     client = asyncio_mqtt.Client(
-                        hostname=mqtt_host, port=mqtt_port, clean_session=False, client_id="beholder_datalogger"
+                        hostname=mqtt_host, port=mqtt_port, clean_session=bool(mqtt_client_id), client_id=mqtt_client_id
                     )
                     await stack.enter_async_context(client)
 
@@ -184,6 +185,7 @@ class DatabaseLogger:
         try:
             mqtt_host = config("MQTT_HOST")
             mqtt_port = config("MQTT_PORT", cast=int, default=1883)
+            mqtt_client_id = config("MQTT_CLIENT_ID", default=None)
 
             database_config = {
                 "hostname": config("DATABASE_HOST"),
@@ -208,7 +210,7 @@ class DatabaseLogger:
             tasks.update(consumers)
 
             # Start the MQTT producer
-            task = asyncio.create_task(self.mqtt_producer(mqtt_host, mqtt_port, message_queue))
+            task = asyncio.create_task(self.mqtt_producer(mqtt_host, mqtt_port, mqtt_client_id, message_queue))
             tasks.add(task)
 
             await asyncio.gather(*tasks)
