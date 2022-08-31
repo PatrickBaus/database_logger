@@ -30,6 +30,8 @@ import signal
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
+from decimal import Decimal
+from typing import TypedDict
 from uuid import UUID
 
 import asyncio_mqtt
@@ -44,6 +46,14 @@ POSTGRES_STMS = {
     "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE"
     " uuid=$2 and sensor_sid=$3 and enabled), $4)",
 }
+
+
+class DataEventDict(TypedDict):
+    timestamp: Decimal
+    sid: int
+    unit: str
+    uuid: str
+    value: int | Decimal
 
 
 class DatabaseLogger:
@@ -66,20 +76,28 @@ class DatabaseLogger:
             await conn.close()
 
     async def mqtt_producer(
-        self, mqtt_host: str, mqtt_port: int, mqtt_client_id: str | None, output_queue, reconnect_interval: float = 3
+        self,
+        mqtt_host: str,
+        mqtt_port: int,
+        mqtt_client_id: str | None,
+        output_queue: asyncio.Queue[DataEventDict],
+        reconnect_interval: float = 3,
     ):
         while "not connected":
             try:
                 async with AsyncExitStack() as stack:
                     # Keep track of the asyncio tasks that we create, so that
                     # we can cancel them on exit
-                    tasks = set()
+                    tasks: set[asyncio.Task] = set()
                     stack.push_async_callback(self.cancel_tasks, tasks)
 
                     # Connect to the MQTT broker
                     self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
                     client = asyncio_mqtt.Client(
-                        hostname=mqtt_host, port=mqtt_port, clean_session=bool(mqtt_client_id), client_id=mqtt_client_id
+                        hostname=mqtt_host,
+                        port=mqtt_port,
+                        clean_session=not bool(mqtt_client_id),
+                        client_id=mqtt_client_id,
                     )
                     await stack.enter_async_context(client)
 
@@ -131,12 +149,18 @@ class DatabaseLogger:
             event = json.loads(payload, use_decimal=True)
             output_queue.put_nowait(event)
 
-    async def mqtt_consumer(self, input_queue, database_config):
+    async def mqtt_consumer(self, input_queue: asyncio.Queue[DataEventDict], database_config, reconnect_interval: float = 3):
         async with AsyncExitStack() as stack:
             data_stream = stream.call(input_queue.get) | pipe.cycle()
             # Need to catch asyncpg.exceptions.InvalidPasswordError
+            self.__logger.info(
+                "Connecting consumer to database at '%s:%i",
+                database_config["hostname"],
+                database_config["port"],
+            )
             conn = await stack.enter_async_context(self.database_connector(**database_config))
             streamer = await stack.enter_async_context(data_stream.stream())
+            item: DataEventDict
             async for item in streamer:
                 try:
                     timestamp = datetime.fromtimestamp(float(item["timestamp"]), timezone.utc)
@@ -146,8 +170,8 @@ class DatabaseLogger:
                 try:
                     uuid, sid, value = UUID(item["uuid"]), item.get("sid", 0), item["value"]
                 except (KeyError, ValueError):
-                    self.__logger.info("Invalid data recieved (%s). Dropping it.", item)
-                    # ignore invalid entrys
+                    self.__logger.info("Invalid data received (%s). Dropping it.", item)
+                    # ignore invalid entries
                     continue
                 try:
                     await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
@@ -158,12 +182,14 @@ class DatabaseLogger:
                     # Drop duplicate entries
                     pass
                 except asyncpg.exceptions.DataError:
-                    self.__logger.info("Invalid data recieved (%s). Dropping it.", item)
+                    self.__logger.info("Invalid data received (%s). Dropping it.", item)
                 else:
                     print(item)
 
     @staticmethod
-    async def mqtt_test_consumer(input_queue, *args, **kwargs):  # pylint: disable=unused-argument  # Testing only
+    async def mqtt_test_consumer(
+        input_queue: asyncio.Queue[DataEventDict], *args, **kwargs
+    ):  # pylint: disable=unused-argument  # Testing only
         data_stream = stream.call(input_queue.get) | pipe.cycle()
         async with data_stream.stream() as streamer:
             async for item in streamer:
@@ -203,9 +229,9 @@ class DatabaseLogger:
         if mqtt_client_id is not None:
             self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_client_id)
         async with AsyncExitStack() as stack:
-            tasks = set()
+            tasks: set[asyncio.Task] = set()
             stack.push_async_callback(self.cancel_tasks, tasks)
-            message_queue = asyncio.Queue()
+            message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
 
             consumers = {
                 asyncio.create_task(self.mqtt_consumer(message_queue, database_config))
