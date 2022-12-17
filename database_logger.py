@@ -93,13 +93,14 @@ class DatabaseLogger:
 
                     # Connect to the MQTT broker
                     self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
-                    client = asyncio_mqtt.Client(
-                        hostname=mqtt_host,
-                        port=mqtt_port,
-                        clean_session=not bool(mqtt_client_id),
-                        client_id=mqtt_client_id,
+                    client = await stack.enter_async_context(
+                        asyncio_mqtt.Client(
+                            hostname=mqtt_host,
+                            port=mqtt_port,
+                            clean_session=not bool(mqtt_client_id),
+                            client_id=mqtt_client_id,
+                        )
                     )
-                    await stack.enter_async_context(client)
 
                     # You can create any number of topic filters
                     topic_filters = ("sensors/+/+/+",)
@@ -121,7 +122,7 @@ class DatabaseLogger:
                     # errors)
                     await asyncio.gather(*tasks)
             except asyncio_mqtt.error.MqttCodeError:
-                # The paho mqtt errorcodes can be found here:
+                # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
                 # https://github.com/sbtinstruments/asyncio-mqtt/blob/master/asyncio_mqtt/error.py
@@ -134,8 +135,8 @@ class DatabaseLogger:
             except asyncio_mqtt.error.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
                 if error is not None:
-                    errorcode = int(error.group(1))
-                    if errorcode == 111:
+                    error_code = int(error.group(1))
+                    if error_code == 111:
                         self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
                     else:
                         self.__logger.exception("Connection error. Retrying.")
@@ -200,7 +201,7 @@ class DatabaseLogger:
 
     @staticmethod
     async def mqtt_test_consumer(
-        input_queue: asyncio.Queue[DataEventDict], *args, **kwargs
+        input_queue: asyncio.Queue[DataEventDict], *_args, **_kwargs
     ):  # pylint: disable=unused-argument  # Testing only
         data_stream = stream.call(input_queue.get) | pipe.cycle()
         async with data_stream.stream() as streamer:
