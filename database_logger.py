@@ -29,7 +29,7 @@ import re  # Used to parse exceptions
 import signal
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TypedDict
 from uuid import UUID
@@ -83,66 +83,49 @@ class DatabaseLogger:
         output_queue: asyncio.Queue[DataEventDict],
         reconnect_interval: float = 3,
     ):
+        last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
+            # Wait for at least reconnect_interval before connecting again
+            if asyncio.get_running_loop().time() - last_reconnect_attempt < reconnect_interval:
+                await asyncio.sleep(asyncio.get_running_loop().time() - reconnect_interval)
+            last_reconnect_attempt = asyncio.get_running_loop().time()
+
             try:
-                async with AsyncExitStack() as stack:
-                    # Keep track of the asyncio tasks that we create, so that
-                    # we can cancel them on exit
-                    tasks: set[asyncio.Task] = set()
-                    stack.push_async_callback(self.cancel_tasks, tasks)
-
-                    # Connect to the MQTT broker
-                    self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
-                    client = await stack.enter_async_context(
-                        asyncio_mqtt.Client(
-                            hostname=mqtt_host,
-                            port=mqtt_port,
-                            clean_session=not bool(mqtt_client_id),
-                            client_id=mqtt_client_id,
-                        )
-                    )
-
-                    # You can create any number of topic filters
-                    topic_filters = ("sensors/+/+/+",)
-                    for topic_filter in topic_filters:
+                # Connect to the MQTT broker
+                self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
+                async with asyncio_mqtt.Client(
+                    hostname=mqtt_host,
+                    port=mqtt_port,
+                    clean_session=not bool(mqtt_client_id),
+                    client_id=mqtt_client_id,
+                ) as client:
+                    async with client.messages() as messages:
+                        await client.subscribe("sensors/#", qos=2)
                         # Log all messages that match the filter
-                        manager = client.filtered_messages(topic_filter)
-                        messages = await stack.enter_async_context(manager)
-                        task = asyncio.create_task(self.log_messages(messages, output_queue))
-                        tasks.add(task)
-
-                    # Messages that doesn't match a filter will get logged here
-                    messages = await stack.enter_async_context(client.unfiltered_messages())
-                    task = asyncio.create_task(self.log_messages(messages, output_queue))
-                    tasks.add(task)
-
-                    await client.subscribe("sensors/#", qos=2)
-
-                    # Wait for everything to complete (or fail due to, e.g., network
-                    # errors)
-                    await asyncio.gather(*tasks)
-            except asyncio_mqtt.error.MqttCodeError:
+                        async for message in messages:
+                            if message.topic.matches("sensors/+/+/+"):
+                                payload = message.payload.decode()
+                                event = json.loads(payload, use_decimal=True)
+                                await output_queue.put(event)
+            except asyncio_mqtt.error.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
                 # https://github.com/sbtinstruments/asyncio-mqtt/blob/master/asyncio_mqtt/error.py
-                # reason_code = exc.rc
-                # self.__logger.exception("PAHO MQTT code error.")
-                await asyncio.sleep(reconnect_interval)
+                reason_code = exc.rc
+                self.__logger.error("PAHO MQTT code error: %s", reason_code)
             except ConnectionRefusedError:
-                self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
-                await asyncio.sleep(reconnect_interval)
+                self.__logger.info("Connection refused by MQTT server (%s:%i). Retrying.", mqtt_host, mqtt_port)
             except asyncio_mqtt.error.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
                 if error is not None:
                     error_code = int(error.group(1))
                     if error_code == 111:
-                        self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
+                        self.__logger.info("Connection refused by MQTT server (%s:%i). Retrying.", mqtt_host, mqtt_port)
                     else:
                         self.__logger.exception("Connection error. Retrying.")
                 else:
                     self.__logger.exception("Connection error. Retrying.")
-                await asyncio.sleep(reconnect_interval)
 
     @staticmethod
     async def log_messages(messages, output_queue):
@@ -154,7 +137,12 @@ class DatabaseLogger:
     async def mqtt_consumer(
         self, input_queue: asyncio.Queue[DataEventDict], database_config, reconnect_interval: float = 3
     ):
+        last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
+            # Wait for at least reconnect_interval before connecting again
+            if asyncio.get_running_loop().time() - last_reconnect_attempt < reconnect_interval:
+                await asyncio.sleep(asyncio.get_running_loop().time() - reconnect_interval)
+            last_reconnect_attempt = asyncio.get_running_loop().time()
             try:
                 async with AsyncExitStack() as stack:
                     data_stream = stream.call(input_queue.get) | pipe.cycle()
@@ -192,12 +180,11 @@ class DatabaseLogger:
                         else:
                             print(item)
             except ConnectionRefusedError:
-                self.__logger.info(
+                self.__logger.error(
                     "Connection refused by host (%s:%i). Retrying.",
                     database_config["hostname"],
                     database_config["port"],
                 )
-                await asyncio.sleep(reconnect_interval)
 
     @staticmethod
     async def mqtt_test_consumer(
