@@ -126,6 +126,7 @@ class DatabaseLogger:
                 # and here (bottom):
                 # https://github.com/sbtinstruments/asyncio-mqtt/blob/master/asyncio_mqtt/error.py
                 # reason_code = exc.rc
+                # self.__logger.exception("PAHO MQTT code error.")
                 await asyncio.sleep(reconnect_interval)
             except ConnectionRefusedError:
                 self.__logger.info("Connection refused by host (%s:%i). Retrying.", mqtt_host, mqtt_port)
@@ -149,42 +150,53 @@ class DatabaseLogger:
             event = json.loads(payload, use_decimal=True)
             output_queue.put_nowait(event)
 
-    async def mqtt_consumer(self, input_queue: asyncio.Queue[DataEventDict], database_config, reconnect_interval: float = 3):
-        async with AsyncExitStack() as stack:
-            data_stream = stream.call(input_queue.get) | pipe.cycle()
-            # Need to catch asyncpg.exceptions.InvalidPasswordError
-            self.__logger.info(
-                "Connecting consumer to database at '%s:%i",
-                database_config["hostname"],
-                database_config["port"],
-            )
-            conn = await stack.enter_async_context(self.database_connector(**database_config))
-            streamer = await stack.enter_async_context(data_stream.stream())
-            item: DataEventDict
-            async for item in streamer:
-                try:
-                    timestamp = datetime.fromtimestamp(float(item["timestamp"]), timezone.utc)
-                except (OverflowError, OSError):
-                    # If there is a conversion error, we will use the current timestamp instead
-                    timestamp = datetime.now(timezone.utc)
-                try:
-                    uuid, sid, value = UUID(item["uuid"]), item.get("sid", 0), item["value"]
-                except (KeyError, ValueError):
-                    self.__logger.info("Invalid data received (%s). Dropping it.", item)
-                    # ignore invalid entries
-                    continue
-                try:
-                    await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
-                except asyncpg.exceptions.NotNullViolationError:
-                    # Ignore unknown sensors
-                    pass
-                except asyncpg.exceptions.UniqueViolationError:
-                    # Drop duplicate entries
-                    pass
-                except asyncpg.exceptions.DataError:
-                    self.__logger.info("Invalid data received (%s). Dropping it.", item)
-                else:
-                    print(item)
+    async def mqtt_consumer(
+        self, input_queue: asyncio.Queue[DataEventDict], database_config, reconnect_interval: float = 3
+    ):
+        while "not connected":
+            try:
+                async with AsyncExitStack() as stack:
+                    data_stream = stream.call(input_queue.get) | pipe.cycle()
+                    # Need to catch asyncpg.exceptions.InvalidPasswordError
+                    self.__logger.info(
+                        "Connecting consumer to database at '%s:%i",
+                        database_config["hostname"],
+                        database_config["port"],
+                    )
+                    conn = await stack.enter_async_context(self.database_connector(**database_config))
+                    streamer = await stack.enter_async_context(data_stream.stream())
+                    item: DataEventDict
+                    async for item in streamer:
+                        try:
+                            timestamp = datetime.fromtimestamp(float(item["timestamp"]), timezone.utc)
+                        except (OverflowError, OSError):
+                            # If there is a conversion error, we will use the current timestamp instead
+                            timestamp = datetime.now(timezone.utc)
+                        try:
+                            uuid, sid, value = UUID(item["uuid"]), item.get("sid", 0), item["value"]
+                        except (KeyError, ValueError):
+                            self.__logger.info("Invalid data received (%s). Dropping it.", item)
+                            # ignore invalid entries
+                            continue
+                        try:
+                            await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
+                        except asyncpg.exceptions.NotNullViolationError:
+                            # Ignore unknown sensors
+                            pass
+                        except asyncpg.exceptions.UniqueViolationError:
+                            # Drop duplicate entries
+                            pass
+                        except asyncpg.exceptions.DataError:
+                            self.__logger.info("Invalid data received (%s). Dropping it.", item)
+                        else:
+                            print(item)
+            except ConnectionRefusedError:
+                self.__logger.info(
+                    "Connection refused by host (%s:%i). Retrying.",
+                    database_config["hostname"],
+                    database_config["port"],
+                )
+                await asyncio.sleep(reconnect_interval)
 
     @staticmethod
     async def mqtt_test_consumer(
@@ -228,6 +240,7 @@ class DatabaseLogger:
 
         if mqtt_client_id is not None:
             self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_client_id)
+
         async with AsyncExitStack() as stack:
             tasks: set[asyncio.Task] = set()
             stack.push_async_callback(self.cancel_tasks, tasks)
