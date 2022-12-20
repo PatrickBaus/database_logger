@@ -103,10 +103,10 @@ class DatabaseLogger:
                         await client.subscribe("sensors/#", qos=2)
                         # Log all messages that match the filter
                         async for message in messages:
-                            if message.topic.matches("sensors/+/+/+"):
-                                payload = message.payload.decode()
-                                event = json.loads(payload, use_decimal=True)
-                                await output_queue.put(event)
+                            #if message.topic.matches("sensors/+/+/+"):
+                            payload = message.payload.decode()
+                            event = json.loads(payload, use_decimal=True)
+                            await output_queue.put(event)
             except asyncio_mqtt.error.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
