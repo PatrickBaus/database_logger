@@ -141,7 +141,7 @@ class DatabaseLogger:
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
             if asyncio.get_running_loop().time() - last_reconnect_attempt < reconnect_interval:
-                await asyncio.sleep(asyncio.get_running_loop().time() - reconnect_interval)
+                await asyncio.sleep(asyncio.get_running_loop().time() - last_reconnect_attempt - reconnect_interval)
             last_reconnect_attempt = asyncio.get_running_loop().time()
             try:
                 async with AsyncExitStack() as stack:
@@ -181,9 +181,10 @@ class DatabaseLogger:
                             print(item)
             except ConnectionRefusedError:
                 self.__logger.error(
-                    "Connection refused by host (%s:%i). Retrying.",
+                    "Connection refused by host (%s:%i). Retrying in %.0f s.",
                     database_config["hostname"],
                     database_config["port"],
+                    max(0., asyncio.get_running_loop().time() - last_reconnect_attempt - reconnect_interval),
                 )
 
     @staticmethod
