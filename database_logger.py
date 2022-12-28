@@ -90,12 +90,15 @@ class DatabaseLogger:
         last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
-            await asyncio.sleep(self._calculate_timeout(last_reconnect_attempt, reconnect_interval))
+            timeout = self._calculate_timeout(last_reconnect_attempt, reconnect_interval)
+            if timeout > 0:
+                self.__logger.info("Delaying reconnect by %.0f s.", timeout)
+            await asyncio.sleep(timeout)
             last_reconnect_attempt = asyncio.get_running_loop().time()
 
             try:
                 # Connect to the MQTT broker
-                self.__logger.info("Connecting producer to MQTT broker at '%s:%i", mqtt_host, mqtt_port)
+                self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", mqtt_host, mqtt_port)
                 async with asyncio_mqtt.Client(
                     hostname=mqtt_host,
                     port=mqtt_port,
@@ -117,16 +120,14 @@ class DatabaseLogger:
                 # https://github.com/sbtinstruments/asyncio-mqtt/blob/master/asyncio_mqtt/error.py
                 reason_code = exc.rc
                 self.__logger.error(
-                    "PAHO MQTT code error: %s. Reconnecting in %.0f s.",
+                    "PAHO MQTT code error: %s. Reconnecting.",
                     reason_code,
-                    self._calculate_timeout(last_reconnect_attempt, reconnect_interval),
                 )
             except ConnectionRefusedError:
                 self.__logger.info(
-                    "Connection refused by MQTT server (%s:%i). Retrying in %.0f s.",
+                    "Connection refused by MQTT server (%s:%i). Retrying.",
                     mqtt_host,
                     mqtt_port,
-                    self._calculate_timeout(last_reconnect_attempt, reconnect_interval),
                 )
             except asyncio_mqtt.error.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
@@ -134,10 +135,9 @@ class DatabaseLogger:
                     error_code = int(error.group(1))
                     if error_code == 111:
                         self.__logger.info(
-                            "Connection refused by MQTT server (%s:%i). Retrying in %.0f s.",
+                            "Connection refused by MQTT server (%s:%i). Retrying.",
                             mqtt_host,
                             mqtt_port,
-                            self._calculate_timeout(last_reconnect_attempt, reconnect_interval),
                         )
                     else:
                         self.__logger.exception("Connection error. Retrying.")
@@ -157,7 +157,10 @@ class DatabaseLogger:
         last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
-            await asyncio.sleep(self._calculate_timeout(last_reconnect_attempt, reconnect_interval))
+            timeout = self._calculate_timeout(last_reconnect_attempt, reconnect_interval)
+            if timeout > 0:
+                self.__logger.info("Delaying reconnect by %.0f s.", timeout)
+            await asyncio.sleep(timeout)
             last_reconnect_attempt = asyncio.get_running_loop().time()
             try:
                 async with AsyncExitStack() as stack:
@@ -197,10 +200,9 @@ class DatabaseLogger:
                             print(item)
             except ConnectionRefusedError:
                 self.__logger.error(
-                    "Connection refused by host (%s:%i). Retrying in %.0f s.",
+                    "Connection refused by host (%s:%i). Retrying.",
                     database_config["hostname"],
                     database_config["port"],
-                    self._calculate_timeout(last_reconnect_attempt, reconnect_interval),
                 )
 
     @staticmethod
