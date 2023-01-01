@@ -214,7 +214,7 @@ class DatabaseLogger:
                     database_config["port"],
                     exc
                 )
-            except ConnectionRefusedError:
+            except (ConnectionRefusedError, ConnectionResetError):
                 self.__logger.error(
                     "Connection refused by host (%s:%i). Retrying.",
                     database_config["hostname"],
