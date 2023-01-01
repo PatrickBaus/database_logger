@@ -206,8 +206,11 @@ class DatabaseLogger:
                             print(item)
                             item = None  # Get a new event to publish
                             input_queue.task_done()
-            except (asyncpg.exceptions.InterfaceError, asyncpg.exceptions.InternalClientError) as exc:
-                # asyncpg.exceptions.InternalClientError is an unclassified error
+            except (
+                    asyncpg.exceptions.InterfaceError,
+                    asyncpg.exceptions.CannotConnectNowError,  # DB is reconnecting
+                    asyncpg.exceptions.InternalClientError,  # an unclassified error
+            ) as exc:
                 self.__logger.error(
                     "Database connection (%s:%i) error: %s. Retrying.",
                     database_config["hostname"],
