@@ -185,19 +185,27 @@ class DatabaseLogger:
                         except (KeyError, ValueError):
                             self.__logger.info("Invalid data received (%s). Dropping it.", item)
                             # ignore invalid entries
+                            item = None  # Get a new event to publish
+                            input_queue.task_done()
                             continue
                         try:
                             await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
                         except asyncpg.exceptions.NotNullViolationError:
                             # Ignore unknown sensors
-                            pass
+                            item = None  # Get a new event to publish
+                            input_queue.task_done()
                         except asyncpg.exceptions.UniqueViolationError:
                             # Drop duplicate entries
-                            pass
+                            item = None  # Get a new event to publish
+                            input_queue.task_done()
                         except asyncpg.exceptions.DataError:
                             self.__logger.info("Invalid data received (%s). Dropping it.", item)
+                            item = None  # Get a new event to publish
+                            input_queue.task_done()
                         else:
                             print(item)
+                            item = None  # Get a new event to publish
+                            input_queue.task_done()
             except asyncpg.exceptions.InterfaceError as exc:
                 self.__logger.error(
                     "Database connection (%s:%i) error: %s. Retrying.",
