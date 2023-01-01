@@ -29,7 +29,7 @@ import re  # Used to parse exceptions
 import signal
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TypedDict
 from uuid import UUID
@@ -37,7 +37,6 @@ from uuid import UUID
 import asyncio_mqtt
 import asyncpg
 import simplejson as json
-from aiostream import pipe, stream
 from decouple import UndefinedValueError, config
 
 from _version import __version__
@@ -112,6 +111,7 @@ class DatabaseLogger:
                             # if message.topic.matches("sensors/+/+/+"):
                             payload = message.payload.decode()
                             event = json.loads(payload, use_decimal=True)
+                            # TODO: validate event
                             await output_queue.put(event)
             except asyncio_mqtt.error.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
@@ -154,6 +154,7 @@ class DatabaseLogger:
     async def mqtt_consumer(
         self, input_queue: asyncio.Queue[DataEventDict], database_config, reconnect_interval: float = 3
     ):
+        item: DataEventDict | None = None
         last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
@@ -163,18 +164,17 @@ class DatabaseLogger:
             await asyncio.sleep(timeout)
             last_reconnect_attempt = asyncio.get_running_loop().time()
             try:
-                async with AsyncExitStack() as stack:
-                    data_stream = stream.call(input_queue.get) | pipe.cycle()
-                    # Need to catch asyncpg.exceptions.InvalidPasswordError
-                    self.__logger.info(
-                        "Connecting consumer to database at '%s:%i",
-                        database_config["hostname"],
-                        database_config["port"],
-                    )
-                    conn = await stack.enter_async_context(self.database_connector(**database_config))
-                    streamer = await stack.enter_async_context(data_stream.stream())
-                    item: DataEventDict
-                    async for item in streamer:
+                self.__logger.info(
+                    "Connecting consumer to database at '%s:%i",
+                    database_config["hostname"],
+                    database_config["port"],
+                )
+                async with self.database_connector(**database_config) as conn:
+                    while "queue not done":
+                        if item is None:
+                            # only get new data if we have pushed everything to the DB
+                            item = await input_queue.get()
+                    # TODO: catch asyncpg.exceptions.InvalidPasswordError
                         try:
                             timestamp = datetime.fromtimestamp(float(item["timestamp"]), timezone.utc)
                         except (OverflowError, OSError):
@@ -198,6 +198,13 @@ class DatabaseLogger:
                             self.__logger.info("Invalid data received (%s). Dropping it.", item)
                         else:
                             print(item)
+            except asyncpg.exceptions.InterfaceError as exc:
+                self.__logger.error(
+                    "Database connection (%s:%i) error: %s. Retrying.",
+                    database_config["hostname"],
+                    database_config["port"],
+                    exc
+                )
             except ConnectionRefusedError:
                 self.__logger.error(
                     "Connection refused by host (%s:%i). Retrying.",
@@ -209,10 +216,9 @@ class DatabaseLogger:
     async def mqtt_test_consumer(
         input_queue: asyncio.Queue[DataEventDict], *_args, **_kwargs
     ):  # pylint: disable=unused-argument  # Testing only
-        data_stream = stream.call(input_queue.get) | pipe.cycle()
-        async with data_stream.stream() as streamer:
-            async for item in streamer:
-                print(item)
+        while "queue not done":
+            item = await input_queue.get()
+            print(item)
 
     async def run(self, number_of_publishers: int = 5):
         """
