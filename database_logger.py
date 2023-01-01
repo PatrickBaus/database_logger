@@ -39,6 +39,8 @@ import asyncpg
 import simplejson as json
 from decouple import UndefinedValueError, config
 
+import socket
+
 from _version import __version__
 
 POSTGRES_STMS = {
@@ -222,6 +224,13 @@ class DatabaseLogger:
                     "Connection refused by host (%s:%i). Retrying.",
                     database_config["hostname"],
                     database_config["port"],
+                )
+            except OSError as exc:
+                self.__logger.error(
+                    "Socket error while connecting to database (%s:%i): %s. Retrying.",
+                    database_config["hostname"],
+                    database_config["port"],
+                    exc
                 )
 
     @staticmethod
