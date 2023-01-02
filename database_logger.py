@@ -154,7 +154,7 @@ class DatabaseLogger:
             output_queue.put_nowait(event)
 
     async def mqtt_consumer(
-        self, input_queue: asyncio.Queue[DataEventDict], database_config, reconnect_interval: float = 3
+        self, input_queue: asyncio.Queue[DataEventDict], database_config, worker_name, reconnect_interval: float = 3
     ):
         item: DataEventDict | None = None
         last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
@@ -162,12 +162,13 @@ class DatabaseLogger:
             # Wait for at least reconnect_interval before connecting again
             timeout = self._calculate_timeout(last_reconnect_attempt, reconnect_interval)
             if timeout > 0:
-                self.__logger.info("Delaying reconnect by %.0f s.", timeout)
+                self.__logger.info("Delaying reconnect of %s by %.0f s.", worker_name, timeout)
             await asyncio.sleep(timeout)
             last_reconnect_attempt = asyncio.get_running_loop().time()
             try:
                 self.__logger.info(
-                    "Connecting consumer to database at '%s:%i",
+                    "Connecting consumer (%s) to database at '%s:%i",
+                    worker_name,
                     database_config["hostname"],
                     database_config["port"],
                 )
@@ -212,6 +213,7 @@ class DatabaseLogger:
                     asyncpg.exceptions.InterfaceError,
                     asyncpg.exceptions.CannotConnectNowError,  # DB is reconnecting
                     asyncpg.exceptions.InternalClientError,  # an unclassified error
+                    asyncpg.exceptions.PostgresError  # Catch-all for Postgres errors
             ) as exc:
                 self.__logger.error(
                     "Database connection (%s:%i) error: %s. Retrying.",
@@ -281,8 +283,8 @@ class DatabaseLogger:
             message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
 
             consumers = {
-                asyncio.create_task(self.mqtt_consumer(message_queue, database_config))
-                for _ in range(number_of_publishers)
+                asyncio.create_task(self.mqtt_consumer(message_queue, database_config, worker_name=f"MQTT consumer {i}"))
+                for i in range(number_of_publishers)
             }
             tasks.update(consumers)
 
