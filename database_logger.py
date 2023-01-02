@@ -177,7 +177,7 @@ class DatabaseLogger:
                         if item is None:
                             # only get new data if we have pushed everything to the DB
                             item = await input_queue.get()
-                    # TODO: catch asyncpg.exceptions.InvalidPasswordError
+                        # TODO: catch asyncpg.exceptions.InvalidPasswordError
                         try:
                             timestamp = datetime.fromtimestamp(float(item["timestamp"]), timezone.utc)
                         except (OverflowError, OSError):
@@ -195,7 +195,7 @@ class DatabaseLogger:
                             await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
                         except (
                             asyncpg.exceptions.NotNullViolationError,  # unknown sensors
-                            asyncpg.exceptions.UniqueViolationError  # duplicate entries
+                            asyncpg.exceptions.UniqueViolationError,  # duplicate entries
                         ):
                             item = None  # Get a new event to publish
                             input_queue.task_done()
@@ -208,16 +208,16 @@ class DatabaseLogger:
                             item = None  # Get a new event to publish
                             input_queue.task_done()
             except (
-                    asyncpg.exceptions.InterfaceError,
-                    asyncpg.exceptions.CannotConnectNowError,  # DB is reconnecting
-                    asyncpg.exceptions.InternalClientError,  # an unclassified error
-                    asyncpg.exceptions.PostgresError  # Catch-all for Postgres errors
+                asyncpg.exceptions.InterfaceError,
+                asyncpg.exceptions.CannotConnectNowError,  # DB is reconnecting
+                asyncpg.exceptions.InternalClientError,  # an unclassified error
+                asyncpg.exceptions.PostgresError,  # Catch-all for Postgres errors
             ) as exc:
                 self.__logger.error(
                     "Database connection (%s:%i) error: %s. Retrying.",
                     database_config["hostname"],
                     database_config["port"],
-                    exc
+                    exc,
                 )
             except (ConnectionRefusedError, ConnectionResetError):
                 self.__logger.error(
@@ -230,7 +230,7 @@ class DatabaseLogger:
                     "Socket error while connecting to database (%s:%i): %s. Retrying.",
                     database_config["hostname"],
                     database_config["port"],
-                    exc
+                    exc,
                 )
 
     @staticmethod
@@ -281,7 +281,9 @@ class DatabaseLogger:
             message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
 
             consumers = {
-                asyncio.create_task(self.mqtt_consumer(message_queue, database_config, worker_name=f"MQTT consumer {i}"))
+                asyncio.create_task(
+                    self.mqtt_consumer(message_queue, database_config, worker_name=f"MQTT consumer {i}")
+                )
                 for i in range(number_of_publishers)
             }
             tasks.update(consumers)
