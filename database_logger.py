@@ -193,12 +193,10 @@ class DatabaseLogger:
                             continue
                         try:
                             await conn.execute(POSTGRES_STMS["insert_data"], timestamp, uuid, sid, value)
-                        except asyncpg.exceptions.NotNullViolationError:
-                            # Ignore unknown sensors
-                            item = None  # Get a new event to publish
-                            input_queue.task_done()
-                        except asyncpg.exceptions.UniqueViolationError:
-                            # Drop duplicate entries
+                        except (
+                            asyncpg.exceptions.NotNullViolationError,  # unknown sensors
+                            asyncpg.exceptions.UniqueViolationError  # duplicate entries
+                        ):
                             item = None  # Get a new event to publish
                             input_queue.task_done()
                         except asyncpg.exceptions.DataError:
