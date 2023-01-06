@@ -161,7 +161,7 @@ class DatabaseLogger:
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
             timeout = self._calculate_timeout(last_reconnect_attempt, reconnect_interval)
-            if timeout > 0:
+            if round(timeout) > 0:  # Do not print '0 s' as this is confusing, Waiting for less than a second is OK.
                 self.__logger.info("Delaying reconnect of %s by %.0f s.", worker_name, timeout)
             await asyncio.sleep(timeout)
             last_reconnect_attempt = asyncio.get_running_loop().time()
