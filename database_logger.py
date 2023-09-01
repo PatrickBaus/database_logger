@@ -24,6 +24,7 @@ sources, that are configured, into a database.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re  # Used to parse exceptions
 import signal
@@ -36,10 +37,7 @@ from uuid import UUID
 
 import asyncio_mqtt
 import asyncpg
-import simplejson as json
 from decouple import UndefinedValueError, config
-
-import socket
 
 from _version import __version__
 

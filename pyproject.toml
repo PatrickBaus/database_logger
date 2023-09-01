@@ -3,7 +3,7 @@ name = "kraken_database_logger"
 authors = [
   { name="Patrick Baus", email="patrick.baus@physik.tu-darmstadt.de" },
 ]
-description = "Python 3 Kraken database logger demo"
+description = "Python 3 Kraken database logger"
 readme = "README.md"
 license = { text="GNU General Public License v3 (GPLv3)" }
 requires-python = ">=3.7"
@@ -27,7 +27,6 @@ dependencies = [
     "asyncio-mqtt ~= 0.16.1",
     "asyncpg ~= 0.27.0",
     "python-decouple ~= 3.6",
-    "simplejson ~= 3.18.0",
 ]
 dynamic = ["version"]
 
@@ -38,11 +37,11 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-    "black", "build", "isort", "mypy", "pre-commit", "pylint", "types-simplejson",
+    "black", "build", "isort", "mypy", "pre-commit", "pylint",
 ]
 
 test = [
-    "mypy", "pylint", "types-simplejson",
+    "mypy", "pylint",
 ]
 
 [tool.pylint.'MESSAGES CONTROL']
