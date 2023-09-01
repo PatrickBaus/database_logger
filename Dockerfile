@@ -48,4 +48,4 @@ RUN chown -R worker:worker /app
 
 USER worker
 
-CMD python3 -u /app/database_logger.py
+CMD python3 -OO -u /app/database_logger.py
