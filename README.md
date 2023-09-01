@@ -131,4 +131,4 @@ I use the [Numpydoc](https://numpydoc.readthedocs.io/en/latest/format.html) styl
 * **Patrick Baus** - *Initial work* - [PatrickBaus](https://github.com/PatrickBaus)
 
 ## License
-This project is licensed under the GPL v3 license - see the [LICENSE](LICENSE) file for details**
+This project is licensed under the GPL v3 license - see the [LICENSE](LICENSE) file for details.
