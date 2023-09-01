@@ -35,7 +35,7 @@ LABEL maintainer="Patrick Baus <patrick.baus@physik.tu-darmstadt.de>"
 LABEL description="Kraken sensor data aggregator."
 
 ARG WORKER_USER_ID=5555
-ARG SENSOR_IP=localhost
+ENV DATABASE_PORT=5432
 
 # Upgrade installed packages,
 # add a user called `worker`
