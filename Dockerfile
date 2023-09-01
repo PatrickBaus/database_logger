@@ -19,7 +19,6 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-ADD https://api.github.com/repos/PatrickBaus/database_logger/git/refs/heads/master version.json
 RUN COLOUR='\e[1;93m' && \
   echo -e "${COLOUR}Installing Kraken database logger...\e[0m" && \
   mkdir /root/.ssh/ && \

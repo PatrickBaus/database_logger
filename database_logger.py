@@ -28,6 +28,7 @@ import json
 import logging
 import re  # Used to parse exceptions
 import signal
+import sys
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
@@ -45,6 +46,47 @@ POSTGRES_STMS = {
     "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE"
     " uuid=$2 and sensor_sid=$3 and enabled), $4)",
 }
+
+
+def load_secret(name: str) -> str:
+    """
+    Loads a sensitive parameter either from the environment variable or Docker secret file. See
+    https://docs.docker.com/engine/swarm/secrets/ for details. The env variable read for the file
+    path is automatically appended by '_FILE'. Using the name 'MY_SECRET', the secret is either read from 'MY_SECRET' or
+    the secret path is read from 'MY_SECRET_FILE'. In the latter case the secret is then read from  the file
+    'MY_SECRET_FILE'. The secret file is preferred over the env variable.
+
+    Parameters
+    ----------
+    name: str
+        The name of the env variable containing the secret or the file path.
+    Returns
+    -------
+    str:
+        The secret read either from the environment or secrets file.
+    """
+    try:
+        from_env = config(name)
+    except UndefinedValueError:
+        from_env = None
+
+    try:
+        if sys.platform == "win32":
+            secret_fpath = f"C:/ProgramData/Docker/secrets/{config(name+'_FILE')}"
+        else:
+            secret_fpath = f"/run/secrets/{config(name+'_FILE')}"
+
+        with open(secret_fpath, newline=None) as secret_file:  # pylint: disable=unspecified-encoding
+            from_secret = secret_file.read().rstrip("\n")
+    except FileNotFoundError:
+        from_secret = None
+
+    if from_secret:
+        return from_secret
+    if from_env:
+        return from_env
+
+    raise UndefinedValueError(f"{name} not found. Declare it as envvar or define a default value.")
 
 
 class DataEventDict(TypedDict):
@@ -298,8 +340,8 @@ class DatabaseLogger:
             database_config = {
                 "hostname": config("DATABASE_HOST"),
                 "port": config("DATABASE_PORT", cast=int, default=5432),
-                "username": config("DATABASE_USER"),
-                "password": config("DATABASE_PASSWORD"),
+                "username": load_secret("DATABASE_USER"),
+                "password": load_secret("DATABASE_PASSWORD"),
                 "database": config("DATABASE_NAME", default="sensors"),
             }
         except UndefinedValueError as exc:
