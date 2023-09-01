@@ -28,7 +28,6 @@ import json
 import logging
 import re  # Used to parse exceptions
 import signal
-import sys
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
@@ -71,19 +70,14 @@ def load_secret(name: str) -> str:
         from_env = None
 
     try:
-        if sys.platform == "win32":
-            secret_fpath = f"C:/ProgramData/Docker/secrets/{config(name+'_FILE')}"
-        else:
-            secret_fpath = f"/run/secrets/{config(name+'_FILE')}"
-
-        with open(secret_fpath, newline=None) as secret_file:  # pylint: disable=unspecified-encoding
+        with open(config(f"{name}_FILE"), newline=None) as secret_file:  # pylint: disable=unspecified-encoding
             from_secret = secret_file.read().rstrip("\n")
     except FileNotFoundError:
         from_secret = None
 
-    if from_secret:
+    if from_secret is not None:
         return from_secret
-    if from_env:
+    if from_env is not None:
         return from_env
 
     raise UndefinedValueError(f"{name} not found. Declare it as envvar or define a default value.")
