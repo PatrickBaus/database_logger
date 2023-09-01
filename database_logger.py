@@ -107,7 +107,7 @@ class DatabaseLogger:
     @asynccontextmanager
     # pylint: disable=too-many-arguments
     async def database_connector(
-        self, hostname: str, port: int, username: str, password: str, database: str
+        self, hostname: str, port: int, username: str, password: str, database: str, **kwargs
     ) -> asyncpg.Connection:
         """
         A wrapper around asyncpg.connect() to create a context manager.
@@ -124,6 +124,8 @@ class DatabaseLogger:
             The database passwort
         database: str
             The database name
+        **kwargs: dict, optional
+            These parameters will be passed to asyncpg.connect() as well
 
         Yields
         -------
@@ -131,7 +133,9 @@ class DatabaseLogger:
             An asyncpg PostgreSQL connection
 
         """
-        conn = await asyncpg.connect(user=username, password=password, database=database, host=hostname, port=port)
+        conn = await asyncpg.connect(
+            user=username, password=password, database=database, host=hostname, port=port, **kwargs
+        )
         try:
             yield conn
         finally:
@@ -141,6 +145,7 @@ class DatabaseLogger:
     def _calculate_timeout(last_reconnect_attempt: float, reconnect_interval: float) -> float:
         return max(0.0, reconnect_interval - (asyncio.get_running_loop().time() - last_reconnect_attempt))
 
+    # pylint: disable=too-many-arguments,too-many-locals
     async def mqtt_producer(
         self,
         mqtt_host: str,
@@ -224,17 +229,35 @@ class DatabaseLogger:
                     self.__logger.exception("Connection error. Retrying.")
 
     async def mqtt_consumer(
-        self, input_queue: asyncio.Queue[DataEventDict], database_config, worker_name, reconnect_interval: float = 3
-    ):
+        self,
+        input_queue: asyncio.Queue[DataEventDict],
+        database_config: dict,
+        worker_name: str,
+        reconnect_interval: float = 3,
+    ) -> None:
+        """
+        A database worker that inserts the data read from the MQTT broker into the SQL database.
+
+        Parameters
+        ----------
+        input_queue: Queue of DataEventDict
+            The event to be inserted into the database
+        database_config: dict
+            A dictionary containing the database configuration parameters passed on to asyncpg.connect()
+        worker_name: str
+            A human-readable name for the worker used for logging.
+        reconnect_interval: float
+            Time in seconds between connection attempts.
+        """
         item: DataEventDict | None = None
-        last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
+        previous_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
-            timeout = self._calculate_timeout(last_reconnect_attempt, reconnect_interval)
+            timeout = self._calculate_timeout(previous_reconnect_attempt, reconnect_interval)
             if round(timeout) > 0:  # Do not print '0 s' as this is confusing, Waiting for less than a second is OK.
                 self.__logger.info("Delaying reconnect of %s by %.0f s.", worker_name, timeout)
             await asyncio.sleep(timeout)
-            last_reconnect_attempt = asyncio.get_running_loop().time()
+            previous_reconnect_attempt = asyncio.get_running_loop().time()
             try:
                 self.__logger.info(
                     "Connecting consumer (%s) to database at '%s:%i",
@@ -302,14 +325,6 @@ class DatabaseLogger:
                     database_config["port"],
                     exc,
                 )
-
-    @staticmethod
-    async def mqtt_test_consumer(
-        input_queue: asyncio.Queue[DataEventDict], *_args, **_kwargs
-    ):  # pylint: disable=unused-argument  # Testing only
-        while "queue not done":
-            item = await input_queue.get()
-            print(item)
 
     async def run(self, number_of_publishers: int = 5):
         """
@@ -387,7 +402,17 @@ class DatabaseLogger:
             self.__logger.exception("Error while reaping tasks during shutdown")
 
     @staticmethod
-    async def cancel_tasks(tasks):
+    async def cancel_tasks(tasks: set[asyncio.Task]) -> None:
+        """
+        Cancel all running tasks and wait for them to finish. It will raise the task exception if the task returns with
+        an exception.
+
+        Parameters
+        ----------
+        tasks: set of asyncio.Task
+            The tasks to cancel
+
+        """
         for task in tasks:
             if task.done():
                 continue
