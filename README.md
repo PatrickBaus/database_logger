@@ -110,13 +110,15 @@ The name of the database that contains the two tables `sensors` and `sensor_data
 The hostname of the [MQTT](https://en.wikipedia.org/wiki/MQTT) broker used to publish the sensor data.
 
 ### MQTT_PORT
-The port used to connect to the MQTT broker. By default, this is `1883`.
+The port used to connect to the [MQTT](https://en.wikipedia.org/wiki/MQTT) broker. By default, this is `1883`.
 
 ### MQTT_CLIENT_ID
-If the MQTT broker supports persistent sessions, an `MQTT_CLIENT_ID` can be set to make sure there is no data loss
-during reconnects. LabKraken publishes all messages with a quality of service (`QOS`) tag set to `2`. This means, that
+If the [MQTT](https://en.wikipedia.org/wiki/MQTT) broker supports persistent sessions, an `MQTT_CLIENT_ID` can be set to
+make sure there is no data loss during reconnects. LabKraken publishes all messages with a
+[quality of service](https://en.wikipedia.org/wiki/MQTT#Quality_of_service) (`QOS`) tag set to `2`. This means that
 all subscribers will receive a message exactly once. Using a custom client id ensures that the messages will get
-delivered as soon as the client has come back online.
+delivered as soon as the client has come back online. The broker will store the messages for the client until that
+happens.
 
 ## Versioning
 I use [SemVer](http://semver.org/) for versioning. For the versions available, see the
