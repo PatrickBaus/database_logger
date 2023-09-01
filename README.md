@@ -11,7 +11,7 @@ The `Kraken logger` is best installed via the Docker repository provided with th
 
 ## ... via [`docker-compose`](https://github.com/docker/compose)
 
-Example `docker-compose.yml` for `Kraken logger`:
+Example `docker-compose.yml` for the `Kraken logger`:
 
 ```yaml
 services:
