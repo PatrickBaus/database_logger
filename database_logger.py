@@ -35,7 +35,7 @@ from decimal import Decimal
 from typing import TypedDict
 from uuid import UUID
 
-import asyncio_mqtt
+import aiomqtt
 import asyncpg
 from decouple import UndefinedValueError, config
 
@@ -48,6 +48,8 @@ POSTGRES_STMS = {
 
 
 class DataEventDict(TypedDict):
+    """The kraken data package"""
+
     timestamp: Decimal
     sid: int
     unit: str
@@ -67,7 +69,32 @@ class DatabaseLogger:
         self.__logger = logging.getLogger(__name__)
 
     @asynccontextmanager
-    async def database_connector(self, hostname: str, port: int, username: str, password: str, database: str):
+    # pylint: disable=too-many-arguments
+    async def database_connector(
+        self, hostname: str, port: int, username: str, password: str, database: str
+    ) -> asyncpg.Connection:
+        """
+        A wrapper around asyncpg.connect() to create a context manager.
+
+        Parameters
+        ----------
+        hostname: str
+            The database hostname
+        port: int
+            The database port
+        username: str
+            The database username
+        password: str
+            The database passwort
+        database: str
+            The database name
+
+        Yields
+        -------
+        asyncpg.Connection
+            An asyncpg PostgreSQL connection
+
+        """
         conn = await asyncpg.connect(user=username, password=password, database=database, host=hostname, port=port)
         try:
             yield conn
@@ -85,20 +112,36 @@ class DatabaseLogger:
         mqtt_client_id: str | None,
         output_queue: asyncio.Queue[DataEventDict],
         reconnect_interval: float = 3,
-    ):
-        last_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
+    ) -> None:
+        """
+        The data produces connects to the MQTT broker and streams the kraken data to send it to the database.
+
+        Parameters
+        ----------
+        mqtt_host: str
+            The MQTT broker hostname
+        mqtt_port: int
+            The  MQTT broker port
+        mqtt_client_id: str
+            The client id used by the data logger to enable MQTT persistence when subscribing to topics
+        output_queue: Queue of DataEventDict
+            The data read from the MQTT stream
+        reconnect_interval: float
+            Time in seconds between connection attempts.
+        """
+        previous_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
         while "not connected":
             # Wait for at least reconnect_interval before connecting again
-            timeout = self._calculate_timeout(last_reconnect_attempt, reconnect_interval)
+            timeout = self._calculate_timeout(previous_reconnect_attempt, reconnect_interval)
             if timeout > 0:
                 self.__logger.info("Delaying reconnect by %.0f s.", timeout)
             await asyncio.sleep(timeout)
-            last_reconnect_attempt = asyncio.get_running_loop().time()
+            previous_reconnect_attempt = asyncio.get_running_loop().time()
 
             try:
                 # Connect to the MQTT broker
                 self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", mqtt_host, mqtt_port)
-                async with asyncio_mqtt.Client(
+                async with aiomqtt.Client(
                     hostname=mqtt_host,
                     port=mqtt_port,
                     clean_session=not bool(mqtt_client_id),
@@ -110,10 +153,10 @@ class DatabaseLogger:
                         async for message in messages:
                             # if message.topic.matches("sensors/+/+/+"):
                             payload = message.payload.decode()
-                            event = json.loads(payload, use_decimal=True)
+                            event = json.loads(payload, parse_float=Decimal)
                             # TODO: validate event
                             await output_queue.put(event)
-            except asyncio_mqtt.error.MqttCodeError as exc:
+            except aiomqtt.error.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
@@ -129,7 +172,7 @@ class DatabaseLogger:
                     mqtt_host,
                     mqtt_port,
                 )
-            except asyncio_mqtt.error.MqttError as exc:
+            except aiomqtt.error.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
                 if error is not None:
                     error_code = int(error.group(1))
@@ -143,13 +186,6 @@ class DatabaseLogger:
                         self.__logger.exception("Connection error. Retrying.")
                 else:
                     self.__logger.exception("Connection error. Retrying.")
-
-    @staticmethod
-    async def log_messages(messages, output_queue):
-        async for message in messages:
-            payload = message.payload.decode()
-            event = json.loads(payload, use_decimal=True)
-            output_queue.put_nowait(event)
 
     async def mqtt_consumer(
         self, input_queue: asyncio.Queue[DataEventDict], database_config, worker_name, reconnect_interval: float = 3

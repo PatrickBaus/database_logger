@@ -24,9 +24,9 @@ classifiers = [
 keywords = ["IoT",]
 dependencies = [
     "typing-extensions; python_version <'3.11'",
-    "asyncio-mqtt ~= 0.16.1",
-    "asyncpg ~= 0.27.0",
-    "python-decouple ~= 3.6",
+    "aiomqtt ~= 1.1.0",
+    "asyncpg ~= 0.28.0",
+    "python-decouple ~= 3.8",
 ]
 dynamic = ["version"]
 
