@@ -10,8 +10,8 @@ RUN COLOUR='\e[1;93m' && \
   echo -e "${COLOUR}Installing build dependencies...\e[0m" && \
   apk --no-cache add --virtual=build-dependencies \
     openssh \
-    git && \
-    py3-pip \
+    git \
+    py3-pip && \
   echo -e "${COLOUR}Done.\e[0m"
 
 # Define the python virtual environment
