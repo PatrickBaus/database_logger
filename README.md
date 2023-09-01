@@ -27,7 +27,7 @@ services:
       - 5432:5432/tcp
 
   database_logger:
-    image: ghcr.io/patrickbaus/database_logger:master
+    image: ghcr.io/patrickbaus/database_logger
     container_name: database_logger
     restart: always
     depends_on:
@@ -69,7 +69,7 @@ shut down. An example implementing [docker secrets](https://docs.docker.com/engi
 ```yaml
 services:
   database_logger:
-    image: ghcr.io/patrickbaus/database_logger:master
+    image: ghcr.io/patrickbaus/database_logger
     container_name: database_logger
     restart: always
     depends_on:
