@@ -59,5 +59,8 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            GIT_REPOSITORY=${{ github.repository }}
+            "SSH_DEPLOY_KEY=${{ secrets.DOCKER_DEPLOY_KEY }}"
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -1,9 +1,12 @@
-FROM alpine:3.17 as builder
+FROM alpine:3.18 as builder
 
 ARG BUILD_CORES
+ARG GIT_REPOSITORY
+ARG SSH_DEPLOY_KEY
 
 # Build the
 RUN COLOUR='\e[1;93m' && \
+  test -n "$GIT_REPOSITORY" || (echo "\e[0;31mGIT_REPOSITORY  not set.\e[0m" && false) && \
   echo -e "${COLOUR}Installing build dependencies...\e[0m" && \
   apk --no-cache add --virtual=build-dependencies \
     build-base \
@@ -19,11 +22,15 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 ADD https://api.github.com/repos/PatrickBaus/database_logger/git/refs/heads/master version.json
 RUN COLOUR='\e[1;93m' && \
   echo -e "${COLOUR}Installing Kraken database logger...\e[0m" && \
-  git clone https://github.com/PatrickBaus/database_logger  app && \
+  mkdir /root/.ssh/ && \
+  echo "${SSH_DEPLOY_KEY}" > /root/.ssh/id_rsa && \
+  chmod 600 /root/.ssh/id_rsa && \
+  ssh-keyscan github.com >> /root/.ssh/known_hosts && \
+  git clone git@github.com:${GIT_REPOSITORY}.git app && \
   pip install ./app && \
   echo -e "${COLOUR}Done.\e[0m"
 
-FROM alpine:3.17
+FROM alpine:3.18
 LABEL maintainer="Patrick Baus <patrick.baus@physik.tu-darmstadt.de>"
 LABEL description="Kraken sensor data aggregator."
 
