@@ -123,7 +123,7 @@ that happens. By default, a random client id is used and persistence is not enab
 ### APPLICATION_LOG_LEVEL
 Changes the logging verbosity of the `Kraken logger`. The options are taken from the
 [Python logging](https://docs.python.org/3/library/logging.html#levels) module and can be set `DEBUG`, `INFO`, `WARNING`,
-`ERROR`, `CRITICAL`. The default log level is `INFO`. For more details see [Logging](#DATABASE_USER_FILE).
+`ERROR`, `CRITICAL`. The default log level is `INFO`. For more details see [Logging](#LOGGING).
 
 # Logging
 The database logger, by default, only logs connection attempts and errors. Setting the log level to `DEBUG` will print all
