@@ -208,7 +208,7 @@ class DatabaseLogger:
                     reason_code,
                 )
             except ConnectionRefusedError:
-                self.__logger.info(
+                self.__logger.warning(
                     "Connection refused by MQTT server (%s:%i). Retrying.",
                     mqtt_host,
                     mqtt_port,
@@ -218,7 +218,7 @@ class DatabaseLogger:
                 if error is not None:
                     error_code = int(error.group(1))
                     if error_code == 111:
-                        self.__logger.info(
+                        self.__logger.warning(
                             "Connection refused by MQTT server (%s:%i). Retrying.",
                             mqtt_host,
                             mqtt_port,
@@ -279,7 +279,7 @@ class DatabaseLogger:
                         try:
                             uuid, sid, value = UUID(item["uuid"]), item.get("sid", 0), item["value"]
                         except (KeyError, ValueError):
-                            self.__logger.info("Invalid data received (%s). Dropping it.", item)
+                            self.__logger.warning("Invalid data received (%s). Dropping it.", item)
                             # ignore invalid entries
                             item = None  # Get a new event to publish
                             input_queue.task_done()
@@ -293,7 +293,7 @@ class DatabaseLogger:
                             item = None  # Get a new event to publish
                             input_queue.task_done()
                         except asyncpg.exceptions.DataError:
-                            self.__logger.info("Invalid data received (%s). Dropping it.", item)
+                            self.__logger.warning("Invalid data received (%s). Dropping it.", item)
                             item = None  # Get a new event to publish
                             input_queue.task_done()
                         else:
