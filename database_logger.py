@@ -297,7 +297,7 @@ class DatabaseLogger:
                             item = None  # Get a new event to publish
                             input_queue.task_done()
                         else:
-                            print(item)
+                            self.__logger.debug("Storing event: (%s).", item)
                             item = None  # Get a new event to publish
                             input_queue.task_done()
             except (
@@ -436,11 +436,33 @@ async def main():
         pass
 
 
+def parse_log_level(log_level: int | str) -> int:
+    """
+    Parse an int or string, then return its standard log level definition.
+    Parameters
+    ----------
+    log_level: int or str
+        The log level. Either a string or a number.
+    Returns
+    -------
+    int
+        The log level as defined by the standard library. Returns logging.INFO as default
+    """
+    try:
+        level = int(log_level)
+    except ValueError:
+        # parse the string
+        level = logging.getLevelName(str(log_level).upper())
+    if isinstance(level, int):
+        return level
+    return logging.INFO  # default log level
+
+
 # Report all mistakes managing asynchronous resources.
 warnings.simplefilter("always", ResourceWarning)
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
-    level=logging.INFO,  # Enable logs from the ip connection. Set to debug for even more info
+    level=config("APPLICATION_LOG_LEVEL", default=logging.INFO, cast=parse_log_level),
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
