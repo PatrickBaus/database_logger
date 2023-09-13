@@ -17,7 +17,7 @@ RUN COLOUR='\e[1;93m' && \
 
 # Define the python virtual environment
 ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
+RUN python3 -m venv --upgrade-deps $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 RUN COLOUR='\e[1;93m' && \
