@@ -8,9 +8,10 @@ ARG SSH_DEPLOY_KEY
 RUN COLOUR='\e[1;93m' && \
   test -n "$GIT_REPOSITORY" || (echo "\e[0;31mGIT_REPOSITORY  not set.\e[0m" && false) && \
   echo -e "${COLOUR}Installing build dependencies...\e[0m" && \
+  if [ "$TARGETPLATFORM" = "linux/arm/v6" ] || [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then BUILD_DEPS="python-dev gcc"; fi && \
   apk --no-cache add --virtual=build-dependencies \
-    openssh-client-common \
-    openssh-client-default \
+    ${}BUILD_DEPS} \
+    openssh \
     git \
     py3-pip && \
   echo -e "${COLOUR}Done.\e[0m"
