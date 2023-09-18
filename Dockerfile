@@ -10,7 +10,7 @@ RUN COLOUR='\e[1;93m' && \
   test -n "$GIT_REPOSITORY" || (echo "\e[0;31mGIT_REPOSITORY  not set.\e[0m" && false) && \
   echo "Building Docker image for the target architecture $TARGETPLATFORM" && \
   echo -e "${COLOUR}Installing build dependencies...\e[0m" && \
-  if [ "$TARGETPLATFORM" = "linux/arm/v6" ] || [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then BUILD_DEPS="python3-dev gcc"; fi && \
+  if [ "$TARGETPLATFORM" = "linux/arm/v6" ] || [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then BUILD_DEPS="python3-dev musl-dev gcc"; fi && \
   apk --no-cache add --virtual=build-dependencies \
     ${BUILD_DEPS} \
     openssh-client-common \
