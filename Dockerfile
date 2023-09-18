@@ -3,15 +3,18 @@ FROM alpine:3.18 as builder
 ARG BUILD_CORES
 ARG GIT_REPOSITORY
 ARG SSH_DEPLOY_KEY
+ARG TARGETPLATFORM
 
 # Build the
 RUN COLOUR='\e[1;93m' && \
   test -n "$GIT_REPOSITORY" || (echo "\e[0;31mGIT_REPOSITORY  not set.\e[0m" && false) && \
+  echo "Building Docker image for the target architecture $TARGETPLATFORM" && \
   echo -e "${COLOUR}Installing build dependencies...\e[0m" && \
   if [ "$TARGETPLATFORM" = "linux/arm/v6" ] || [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then BUILD_DEPS="python-dev gcc"; fi && \
   apk --no-cache add --virtual=build-dependencies \
     ${BUILD_DEPS} \
-    openssh \
+    openssh-client-common \
+    openssh-client-default \
     git \
     py3-pip && \
   echo -e "${COLOUR}Done.\e[0m"
