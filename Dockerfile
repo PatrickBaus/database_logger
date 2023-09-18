@@ -10,7 +10,7 @@ RUN COLOUR='\e[1;93m' && \
   echo -e "${COLOUR}Installing build dependencies...\e[0m" && \
   if [ "$TARGETPLATFORM" = "linux/arm/v6" ] || [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then BUILD_DEPS="python-dev gcc"; fi && \
   apk --no-cache add --virtual=build-dependencies \
-    ${}BUILD_DEPS} \
+    ${BUILD_DEPS} \
     openssh \
     git \
     py3-pip && \
