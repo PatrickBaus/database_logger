@@ -23,8 +23,6 @@ services:
     restart: always
     environment:
       POSTGRES_PASSWORD: example
-    secrets:
-      - timescale_password
     ports:
       - 5432:5432/tcp
 
