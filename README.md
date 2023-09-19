@@ -1,3 +1,5 @@
+[![GitHub release](https://img.shields.io/github/release/PatrickBaus/database_logger.svg)](../../releases/latest)
+[![CI workflow](https://img.shields.io/github/actions/workflow/status/PatrickBaus/database_logger/ci.yml?branch=master&label=ci&logo=github)](../../actions?workflow=ci)
 [![pylint](https://github.com/PatrickBaus/database_logger/actions/workflows/pylint.yml/badge.svg)](https://github.com/PatrickBaus/database_logger/actions/workflows/pylint.yml)
 [![code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)

@@ -2,7 +2,7 @@ name: Trivy vulnerability test
 
 on:
   workflow_run:
-    workflows: [ "Docker publish" ]
+    workflows: [ "ci" ]
     types:
       - completed
   schedule:
