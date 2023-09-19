@@ -5,8 +5,8 @@
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](../../pkgs/container/database_logger)
 # LabKraken Database Logger
 This is a simple Python asyncio database logger for the [LabKraken](https://github.com/PatrickBaus/sensorDaemon) data
-acquisition daemon. It can connect to an MQTT broker and stream the data into a [PostgreSQL](https://www.postgresql.org/)
-or [Timescale](https://www.timescale.com/) database.
+acquisition daemon. It can connect to an [MQTT](https://en.wikipedia.org/wiki/MQTT) broker and stream the data into a
+[PostgreSQL](https://www.postgresql.org/) or [Timescale](https://www.timescale.com/) database.
 
 # Setup
 The `Kraken logger` is best installed via the Docker repository provided with this repository.
@@ -46,12 +46,13 @@ The `Kraken logger` image can be configured in many ways and the example given a
 educational purposes only. The easiest way is to use environment variables.
 
 ## Environment Variables
-The environment variables can be used to configure the connection options for both the MQTT server and the postgreSQL
-server. For passwords, it is recommended to use [docker secrets](https://docs.docker.com/engine/swarm/secrets/) and
+The environment variables can be used to configure the connection options for both the [MQTT](https://en.wikipedia.org/wiki/MQTT)
+server and the [PostgreSQL](https://www.postgresql.org/) server. For passwords, it is recommended to use
+[docker secrets](https://docs.docker.com/engine/swarm/secrets/) and
 the corresponding variable that ends with `_FILE`.
 
 ### DATABASE_HOST
-This variable defines the hostname of the postgreSQL database. It is a mandatory parameter. Use it in conjunction with
+This variable defines the hostname of the [PostgreSQL](https://www.postgresql.org/) database. It is a mandatory parameter. Use it in conjunction with
 the `DATABASE_PORT` variable to set the database connection parameters.
 
 ### DATABASE_PORT
