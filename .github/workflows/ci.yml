@@ -129,7 +129,7 @@ jobs:
         with:
           path: artifacts
 
-      - name: Merge files
+      - name: Merge artifacts
         run: |
           mkdir /tmp/digests
           mv artifacts/*/* /tmp/digests
