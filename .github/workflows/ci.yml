@@ -95,12 +95,21 @@ jobs:
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
+        shell: bash
+
+      - name: Sanitize platform string
+        id: platform
+        env:
+          PLATFORM_STRING: ${{ matrix.platform }}
+        run: |
+          echo "value=${PLATFORM_STRING//\//_}" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Upload digest
         if: needs.prepare.outputs.push == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: digests
+          name: digest-${{ steps.platform.outputs.value }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -118,8 +127,13 @@ jobs:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          name: digests
-          path: /tmp/digests
+          path: artifacts
+
+      - name: Merge files
+        run: |
+          mkdir /tmp/digests
+          mv artifacts/*/* /tmp/digests
+        shell: bash
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
