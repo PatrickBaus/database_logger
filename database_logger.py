@@ -72,7 +72,7 @@ def load_secret(name: str) -> str:
     try:
         with open(config(f"{name}_FILE"), newline=None) as secret_file:  # pylint: disable=unspecified-encoding
             from_secret = secret_file.read().rstrip("\n")
-    except FileNotFoundError:
+    except (FileNotFoundError, UndefinedValueError):
         from_secret = None
 
     if from_secret is not None:
@@ -201,7 +201,7 @@ class DatabaseLogger:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
-                # https://github.com/sbtinstruments/asyncio-mqtt/blob/master/asyncio_mqtt/error.py
+                # https://github.com/sbtinstruments/aiomqtt/blob/main/aiomqtt/exceptions.py
                 reason_code = exc.rc
                 self.__logger.error(
                     "PAHO MQTT code error: %s. Reconnecting.",
