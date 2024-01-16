@@ -186,23 +186,22 @@ class DatabaseLogger:
                     hostname=mqtt_host,
                     port=mqtt_port,
                     clean_session=not bool(mqtt_client_id),
-                    client_id=mqtt_client_id,
+                    identifier=mqtt_client_id,
                 ) as client:
-                    async with client.messages() as messages:
-                        await client.subscribe("sensors/#", qos=2)
-                        # Log all messages that match the filter
-                        async for message in messages:
-                            # if message.topic.matches("sensors/+/+/+"):
-                            self.__logger.debug("MQTT message received: (%s).", message.payload)
-                            try:
-                                event = json.loads(message.payload, parse_float=Decimal)
-                                # TODO: validate event
-                                await output_queue.put(event)
-                            except (json.decoder.JSONDecodeError, TypeError):
-                                self.__logger.warning(
-                                    "Received invalid message '%s' on channel '%s'", message.payload, message.topic
-                                )
-            except aiomqtt.error.MqttCodeError as exc:
+                    await client.subscribe("sensors/#", qos=2)
+                    message: aiomqtt.Message
+                    async for message in client.messages:
+                        # if message.topic.matches("sensors/+/+/+"):
+                        self.__logger.debug("MQTT message received: (%s).", message.payload)
+                        try:
+                            event = json.loads(message.payload, parse_float=Decimal)
+                            # TODO: validate event
+                            await output_queue.put(event)
+                        except (json.decoder.JSONDecodeError, TypeError):
+                            self.__logger.warning(
+                                "Received invalid message '%s' on channel '%s'", message.payload, message.topic
+                            )
+            except aiomqtt.exceptions.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
@@ -218,7 +217,7 @@ class DatabaseLogger:
                     mqtt_host,
                     mqtt_port,
                 )
-            except aiomqtt.error.MqttError as exc:
+            except aiomqtt.exceptions.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
                 if error is not None:
                     error_code = int(error.group(1))
@@ -434,7 +433,7 @@ async def main():
     """
     daemon = DatabaseLogger()
     try:
-        await daemon.run()
+        await daemon.run(number_of_publishers=0)
     except asyncio.CancelledError:
         # Swallow that error, because this is the root task, there is nothing
         # cancel above it.
