@@ -193,10 +193,15 @@ class DatabaseLogger:
                         # Log all messages that match the filter
                         async for message in messages:
                             # if message.topic.matches("sensors/+/+/+"):
-                            payload = message.payload.decode()
-                            event = json.loads(payload, parse_float=Decimal)
-                            # TODO: validate event
-                            await output_queue.put(event)
+                            self.__logger.debug("MQTT message received: (%s).", message.payload)
+                            try:
+                                event = json.loads(message.payload, parse_float=Decimal)
+                                # TODO: validate event
+                                await output_queue.put(event)
+                            except (json.decoder.JSONDecodeError, TypeError):
+                                self.__logger.warning(
+                                    "Received invalid message '%s' on channel '%s'", message.payload, message.topic
+                                )
             except aiomqtt.error.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
