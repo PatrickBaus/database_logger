@@ -189,7 +189,6 @@ class DatabaseLogger:
                     identifier=mqtt_client_id,
                 ) as client:
                     await client.subscribe("sensors/#", qos=2)
-                    message: aiomqtt.Message
                     async for message in client.messages:
                         # if message.topic.matches("sensors/+/+/+"):
                         self.__logger.debug("MQTT message received: (%s).", message.payload)
@@ -201,7 +200,7 @@ class DatabaseLogger:
                             self.__logger.warning(
                                 "Received invalid message '%s' on channel '%s'", message.payload, message.topic
                             )
-            except aiomqtt.exceptions.MqttCodeError as exc:
+            except aiomqtt.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
                 # https://github.com/eclipse/paho.mqtt.python/blob/master/src/paho/mqtt/reasoncodes.py
                 # and here (bottom):
@@ -217,7 +216,7 @@ class DatabaseLogger:
                     mqtt_host,
                     mqtt_port,
                 )
-            except aiomqtt.exceptions.MqttError as exc:
+            except aiomqtt.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
                 if error is not None:
                     error_code = int(error.group(1))
