@@ -432,7 +432,7 @@ async def main():
     """
     daemon = DatabaseLogger()
     try:
-        await daemon.run(number_of_publishers=0)
+        await daemon.run()
     except asyncio.CancelledError:
         # Swallow that error, because this is the root task, there is nothing
         # cancel above it.
