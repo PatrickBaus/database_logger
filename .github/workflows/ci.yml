@@ -13,6 +13,35 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  tests:
+    name: Run Python tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [ "3.12", ]
+
+    steps:
+    - name: Checkout source repository
+      uses: actions/checkout@v4
+
+    - name: Set up python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        cache: 'pip' # caching pip dependencies
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies for testing
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install .[test]
+
+    - name: Test with pytest
+      env:
+        GIT_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+      run: |
+        pytest --exitfirst --verbose --failed-first
+
   prepare:
     runs-on: ubuntu-latest
     steps:
@@ -45,6 +74,7 @@ jobs:
 
   build:
     needs:
+      - tests
       - prepare
     runs-on: ubuntu-latest
     permissions:

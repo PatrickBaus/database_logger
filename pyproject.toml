@@ -38,11 +38,11 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-    "black", "build", "isort", "mypy", "pre-commit", "pylint",
+    "black", "build", "isort", "mypy", "pre-commit", "pylint", "pytest"
 ]
 
 test = [
-    "mypy", "pylint",
+    "mypy", "pylint", "pytest"
 ]
 
 [tool.pylint.'MESSAGES CONTROL']
