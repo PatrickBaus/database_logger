@@ -157,7 +157,7 @@ jobs:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/digests
+          path: digests
           pattern: digest-*
           merge-multiple: true
 
@@ -176,7 +176,7 @@ jobs:
 
       - name: Create manifest list and push
         if: needs.prepare.outputs.push == 'true'
-        working-directory: /tmp/digests
+        working-directory: digests
         run: |
           docker buildx imagetools create $(jq -r '"-t " + (.tags | join(" -t "))' <<< '${{ needs.prepare.outputs.meta-json }}') \
             $(printf '${{ needs.prepare.outputs.image }}@sha256:%s ' *)
