@@ -1,4 +1,5 @@
 """Test to catch invalid versions when releasing a new git tag"""
+
 import os
 
 from _version import __version__

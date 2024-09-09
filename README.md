@@ -59,7 +59,7 @@ The port used by the database. The default is port `5432`.
 
 ### DATABASE_USER
 The username used for authentication to the database. This user should have minimal access privileges. The privileges
-required are `SELECT` and `INSERT` on table `sensor_data` and `SELECT` on table `sensors`. Using 
+required are `SELECT` and `INSERT` on table `sensor_data` and `SELECT` on table `sensors`. Using
 [docker secrets](https://docs.docker.com/engine/swarm/secrets/) is the preferred way though and any password set via
 secrets will take precedence.
 
@@ -120,7 +120,7 @@ make sure there is no data loss during reconnects. LabKraken publishes all messa
 [quality of service](https://en.wikipedia.org/wiki/MQTT#Quality_of_service) (`QOS`) tag set to `2`. This means that
 all subscribers will receive a message exactly once. Using a custom client id ensures that the messages will get
 delivered as soon as a disconnected client comes back online. The broker will store the messages for the client until
-that happens. By default, a random client id is used and persistence is not enabled. 
+that happens. By default, a random client id is used and persistence is not enabled.
 
 ### APPLICATION_LOG_LEVEL
 Changes the logging verbosity of the `Kraken logger`. The options are taken from the
