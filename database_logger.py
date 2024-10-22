@@ -105,7 +105,7 @@ class DatabaseLogger:
         self.__logger = logging.getLogger(__name__)
 
     @asynccontextmanager
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     async def database_connector(
         self, hostname: str, port: int, username: str, password: str, database: str, **kwargs
     ) -> asyncpg.Connection:
@@ -145,7 +145,7 @@ class DatabaseLogger:
     def _calculate_timeout(last_reconnect_attempt: float, reconnect_interval: float) -> float:
         return max(0.0, reconnect_interval - (asyncio.get_running_loop().time() - last_reconnect_attempt))
 
-    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     async def mqtt_producer(
         self,
         mqtt_host: str,
@@ -155,7 +155,7 @@ class DatabaseLogger:
         reconnect_interval: float = 3,
     ) -> None:
         """
-        The data produces connects to the MQTT broker and streams the kraken data to send it to the database.
+        The producer connects to the MQTT broker and streams kraken data to be sent to the database.
 
         Parameters
         ----------
