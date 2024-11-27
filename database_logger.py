@@ -121,7 +121,7 @@ class DatabaseLogger:
         username: str
             The database username
         password: str
-            The database passwort
+            The database password
         database: str
             The database name
         **kwargs: dict, optional
