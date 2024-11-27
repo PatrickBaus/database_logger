@@ -29,7 +29,7 @@ import logging
 import re  # Used to parse exceptions
 import signal
 import warnings
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TypedDict
@@ -363,24 +363,16 @@ class DatabaseLogger:
         if mqtt_client_id is not None:
             self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_client_id)
 
-        async with AsyncExitStack() as stack:
-            tasks: set[asyncio.Task] = set()
-            stack.push_async_callback(self.cancel_tasks, tasks)
+        async with asyncio.TaskGroup() as task_group:
             message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
 
-            consumers = {
-                asyncio.create_task(
+            for i in range(number_of_publishers):
+                task_group.create_task(
                     self.mqtt_consumer(message_queue, database_config, worker_name=f"MQTT consumer {i}")
                 )
-                for i in range(number_of_publishers)
-            }
-            tasks.update(consumers)
 
             # Start the MQTT producer
-            task = asyncio.create_task(self.mqtt_producer(mqtt_host, mqtt_port, mqtt_client_id, message_queue))
-            tasks.add(task)
-
-            await asyncio.gather(*tasks)
+            task_group.create_task(self.mqtt_producer(mqtt_host, mqtt_port, mqtt_client_id, message_queue))
 
     async def shutdown(self):
         """
@@ -403,27 +395,6 @@ class DatabaseLogger:
             # We want to catch all exceptions on shutdown, except the asyncio.CancelledError
             # The exception will then be printed using the logger
             self.__logger.exception("Error while reaping tasks during shutdown")
-
-    @staticmethod
-    async def cancel_tasks(tasks: set[asyncio.Task]) -> None:
-        """
-        Cancel all running tasks and wait for them to finish. It will raise the task exception if the task returns with
-        an exception.
-
-        Parameters
-        ----------
-        tasks: set of asyncio.Task
-            The tasks to cancel
-
-        """
-        for task in tasks:
-            if task.done():
-                continue
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
 
 
 async def main():
@@ -469,4 +440,4 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-asyncio.run(main(), debug=True)
+asyncio.run(main(), debug=False)
