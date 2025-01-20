@@ -47,7 +47,7 @@ POSTGRES_STMS = {
 }
 
 
-def load_secret(name: str) -> str:
+def load_secret(name: str, *args, **kwargs) -> str:
     """
     Loads a sensitive parameter either from the environment variable or Docker secret file. See
     https://docs.docker.com/engine/swarm/secrets/ for details. The env variable read for the file
@@ -64,23 +64,27 @@ def load_secret(name: str) -> str:
     str:
         The secret read either from the environment or secrets file.
     """
+    # Remove the default return value for testing against the secrets file, we will put it back later.
+    if "default" in kwargs:
+        has_default = True
+        default_value = kwargs.pop("default")
+    else:
+        has_default = False
+        default_value = None
     try:
-        from_env = config(name)
+        with open(
+            config(f"{name}_FILE", *args, **kwargs), newline=None, mode="r", encoding="utf-8"
+        ) as secret_file:  # pylint: disable=unspecified-encoding
+            return secret_file.read().rstrip("\n")
     except UndefinedValueError:
-        from_env = None
+        pass
 
+    if has_default:
+        kwargs["default"] = default_value
     try:
-        with open(config(f"{name}_FILE"), newline=None) as secret_file:  # pylint: disable=unspecified-encoding
-            from_secret = secret_file.read().rstrip("\n")
-    except (FileNotFoundError, UndefinedValueError):
-        from_secret = None
-
-    if from_secret is not None:
-        return from_secret
-    if from_env is not None:
-        return from_env
-
-    raise UndefinedValueError(f"{name} not found. Declare it as envvar or define a default value.")
+        return config(name, *args, **kwargs)
+    except UndefinedValueError:
+        raise UndefinedValueError(f"{name} not found. Declare it as env var or define a default value.") from None
 
 
 class DataEventDict(TypedDict):
@@ -148,9 +152,11 @@ class DatabaseLogger:
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     async def mqtt_producer(
         self,
-        mqtt_host: str,
-        mqtt_port: int,
-        mqtt_client_id: str | None,
+        hostname: str,
+        port: int,
+        client_id: str | None,
+        username: str | None,
+        password: str | None,
         output_queue: asyncio.Queue[DataEventDict],
         reconnect_interval: float = 3,
     ) -> None:
@@ -159,15 +165,20 @@ class DatabaseLogger:
 
         Parameters
         ----------
-        mqtt_host: str
+        hostname: str
             The MQTT broker hostname
-        mqtt_port: int
+        port: int
             The  MQTT broker port
-        mqtt_client_id: str
-            The client id used by the data logger to enable MQTT persistence when subscribing to topics
+        client_id: str
+            The client id used by the data logger to enable MQTT persistence when subscribing to topics. Setting this
+            to None will use a random client id and disables persistent messages.
+        username: str
+            The username used for authentication with the MQTT server. Set to None if no username is required.
+        password: str
+            The password used for authentication with the MQTT server. Set to None if no password is required.
         output_queue: Queue of DataEventDict
             The data read from the MQTT stream
-        reconnect_interval: float
+        reconnect_interval: float, default=3
             Time in seconds between connection attempts.
         """
         previous_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
@@ -181,17 +192,19 @@ class DatabaseLogger:
 
             try:
                 # Connect to the MQTT broker
-                self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", mqtt_host, mqtt_port)
+                self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", hostname, port)
                 async with aiomqtt.Client(
-                    hostname=mqtt_host,
-                    port=mqtt_port,
-                    clean_session=not bool(mqtt_client_id),
-                    identifier=mqtt_client_id,
+                    hostname=hostname,
+                    port=port,
+                    clean_session=not bool(client_id),
+                    identifier=client_id,
+                    username=username,
+                    password=password,
                 ) as client:
                     await client.subscribe("sensors/#", qos=2)
                     async for message in client.messages:
                         # if message.topic.matches("sensors/+/+/+"):
-                        self.__logger.debug("MQTT message received: (%s).", message.payload)
+                        self.__logger.debug("MQTT message received: (%s).", message.payload.decode("utf-8"))
                         try:
                             event = json.loads(message.payload, parse_float=Decimal)
                             # TODO: validate event
@@ -213,8 +226,8 @@ class DatabaseLogger:
             except ConnectionRefusedError:
                 self.__logger.warning(
                     "Connection refused by MQTT server (%s:%i). Retrying.",
-                    mqtt_host,
-                    mqtt_port,
+                    hostname,
+                    port,
                 )
             except aiomqtt.MqttError as exc:
                 error = re.search(r"^\[Errno (\d+)\]", str(exc))
@@ -223,8 +236,8 @@ class DatabaseLogger:
                     if error_code == 111:
                         self.__logger.warning(
                             "Connection refused by MQTT server (%s:%i). Retrying.",
-                            mqtt_host,
-                            mqtt_port,
+                            hostname,
+                            port,
                         )
                     else:
                         self.__logger.exception("Connection error. Retrying.")
@@ -258,7 +271,7 @@ class DatabaseLogger:
             # Wait for at least reconnect_interval before connecting again
             timeout = self._calculate_timeout(previous_reconnect_attempt, reconnect_interval)
             if round(timeout) > 0:  # Do not print '0 s' as this is confusing, Waiting for less than a second is OK.
-                self.__logger.info("Delaying reconnect of %s by %.0f s.", worker_name, timeout)
+                self.__logger.info("Delaying reconnect of '%s' by %.0f s.", worker_name, timeout)
             await asyncio.sleep(timeout)
             previous_reconnect_attempt = asyncio.get_running_loop().time()
             try:
@@ -317,7 +330,7 @@ class DatabaseLogger:
                 )
             except (ConnectionRefusedError, ConnectionResetError):
                 self.__logger.error(
-                    "Connection refused by host (%s:%i). Retrying.",
+                    "Connection refused by database host (%s:%i). Retrying.",
                     database_config["hostname"],
                     database_config["port"],
                 )
@@ -345,9 +358,13 @@ class DatabaseLogger:
 
         # Read either environment variable, settings.ini or .env file
         try:
-            mqtt_host = config("MQTT_HOST")
-            mqtt_port = config("MQTT_PORT", cast=int, default=1883)
-            mqtt_client_id = config("MQTT_CLIENT_ID", default=None)
+            mqtt_config = {
+                "hostname": config("MQTT_HOST"),
+                "port": config("MQTT_PORT", cast=int, default=1883),
+                "client_id": config("MQTT_CLIENT_ID", default=None),
+                "username": load_secret("MQTT_CLIENT_USER", default=None),
+                "password": load_secret("MQTT_CLIENT_PASSWORD", default=None),
+            }
 
             database_config = {
                 "hostname": config("DATABASE_HOST"),
@@ -360,8 +377,13 @@ class DatabaseLogger:
             self.__logger.error("Environment variable undefined: %s", exc)
             return
 
-        if mqtt_client_id is not None:
-            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_client_id)
+        if mqtt_config["client_id"] is None:
+            self.__logger.warning(
+                "No MQTT client id set. Durable queues cannot be enabled. Events will be lost when "
+                "the logger disconnects from the MQTT server."
+            )
+        else:
+            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_config["client_id"])
 
         async with asyncio.TaskGroup() as task_group:
             message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
@@ -372,7 +394,7 @@ class DatabaseLogger:
                 )
 
             # Start the MQTT producer
-            task_group.create_task(self.mqtt_producer(mqtt_host, mqtt_port, mqtt_client_id, message_queue))
+            task_group.create_task(self.mqtt_producer(output_queue=message_queue, **mqtt_config))
 
     async def shutdown(self):
         """
