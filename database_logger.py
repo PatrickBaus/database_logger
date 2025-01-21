@@ -238,7 +238,7 @@ class DatabaseLogger:
                     port,
                 )
             except aiomqtt.MqttError as exc:
-                error = re.search(r"^\[Errno (\d+)\]", str(exc))
+                error = re.search(r"\[Errno (\d+)]", str(exc))
                 if error is not None:
                     error_code = int(error.group(1))
                     if error_code == 111:
