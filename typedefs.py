@@ -24,8 +24,8 @@ class MQTTParams(BaseModel):
     ----------
     hosts: List of Tuple of str and int
         A list of host:port tuples. The list contains the servers of a cluster. If no port is provided it defaults to
-        1883. If port number 0 is provided the default value of 1883 is used as well.
-    client_id: str or None
+        1883. If port number 0 is provided the default value of 1883 is used.
+    identifier: str or None
         An MQTT client id used to uniquely identify a client to persist messages.
     username: str or None
         The username used for authentication. Set to None if no username is required
@@ -34,7 +34,7 @@ class MQTTParams(BaseModel):
     """
 
     hosts: list[tuple[str, int]]
-    client_id: str | None
+    identifier: str | None
     username: str | None
     password: str | None
 

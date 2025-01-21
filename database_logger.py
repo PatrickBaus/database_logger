@@ -154,34 +154,29 @@ class DatabaseLogger:
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     async def mqtt_producer(
         self,
-        hosts: list[tuple[str, int]],
-        client_id: str | None,
-        username: str | None,
-        password: str | None,
+        mqtt_config: MQTTParams,
         output_queue: asyncio.Queue[DataEventDict],
         reconnect_interval: float = 3,
     ) -> None:
         """
-        The producer connects to the MQTT broker and streams kraken data to be sent to the database.
+        The producer connects to the MQTT broker and streams Kraken data to be sent to the database.
 
         Parameters
         ----------
-        hosts: list[tuple[str, int]]
-            The MQTT broker hostname and port
-        client_id: str
+        mqtt_config: MQTTParams
             The client id used by the data logger to enable MQTT persistence when subscribing to topics. Setting this
             to None will use a random client id and disables persistent messages.
-        username: str
-            The username used for authentication with the MQTT server. Set to None if no username is required.
-        password: str
-            The password used for authentication with the MQTT server. Set to None if no password is required.
+            The username/password is used for authentication with the MQTT server. Set to None if no username is
+            required.
         output_queue: Queue of DataEventDict
             The data read from the MQTT stream
         reconnect_interval: float, default=3
             Time in seconds between connection attempts.
         """
         previous_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
-        for hostname, port in itertools.cycle(hosts):  # iterate over the list of hostnames until the end of time
+        for hostname, port in itertools.cycle(
+            mqtt_config.hosts
+        ):  # iterate over the list of hostnames until the end of time
             # Wait for at least reconnect_interval before connecting again
             timeout = self._calculate_timeout(previous_reconnect_attempt, reconnect_interval)
             if timeout > 0:
@@ -193,12 +188,8 @@ class DatabaseLogger:
                 # Connect to the MQTT broker
                 self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", hostname, port)
                 async with aiomqtt.Client(
-                    hostname=hostname,
-                    port=port,
-                    clean_session=not bool(client_id),
-                    identifier=client_id,
-                    username=username,
-                    password=password,
+                    **mqtt_config.model_dump(),
+                    clean_session=not bool(mqtt_config.identifier),
                 ) as client:
                     self.__logger.info("Connected to MQTT broker at '%s:%i'", hostname, port)
                     await client.subscribe("sensors/#", qos=2)
@@ -406,7 +397,7 @@ class DatabaseLogger:
                 )
 
             # Start the MQTT producer
-            task_group.create_task(self.mqtt_producer(output_queue=message_queue, **mqtt_config.model_dump()))
+            task_group.create_task(self.mqtt_producer(output_queue=message_queue, mqtt_config=mqtt_config))
 
     async def shutdown(self):
         """
