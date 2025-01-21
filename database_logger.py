@@ -193,7 +193,7 @@ class DatabaseLogger:
                     **mqtt_config.model_dump(exclude={"hosts"}),
                     clean_session=not bool(mqtt_config.identifier),
                 ) as client:
-                    self.__logger.info("Connected to MQTT broker at '%s:%i'", hostname, port)
+                    self.__logger.info("Connected producer to MQTT broker at '%s:%i'", hostname, port)
                     await client.subscribe("sensors/#", qos=2)
                     async for message in client.messages:
                         # if message.topic.matches("sensors/+/+/+"):
