@@ -164,8 +164,8 @@ class DatabaseLogger:
         Parameters
         ----------
         mqtt_config: MQTTParams
-            The client id used by the data logger to enable MQTT persistence when subscribing to topics. Setting this
-            to None will use a random client id and disables persistent messages.
+            The client id/identifier used by the data logger to enable MQTT persistence when subscribing to topics.
+            Setting this to None will use a random client id and disables persistent messages.
             The username/password is used for authentication with the MQTT server. Set to None if no username is
             required.
         output_queue: Queue of DataEventDict
@@ -188,7 +188,9 @@ class DatabaseLogger:
                 # Connect to the MQTT broker
                 self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", hostname, port)
                 async with aiomqtt.Client(
-                    **mqtt_config.model_dump(),
+                    hostname=hostname,
+                    port=port,
+                    **mqtt_config.model_dump(exclude={"hosts"}),
                     clean_session=not bool(mqtt_config.identifier),
                 ) as client:
                     self.__logger.info("Connected to MQTT broker at '%s:%i'", hostname, port)
@@ -379,13 +381,13 @@ class DatabaseLogger:
             self.__logger.error("Environment variable undefined: %s", exc)
             return
 
-        if mqtt_config.client_id is None:
+        if mqtt_config.identifier is None:
             self.__logger.warning(
                 "No MQTT client id set. Durable queues cannot be enabled. Events will be lost when "
                 "the logger disconnects from the MQTT server."
             )
         else:
-            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_config.client_id)
+            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_config.identifier)
 
         async with asyncio.TaskGroup() as task_group:
             message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
