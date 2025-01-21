@@ -278,15 +278,17 @@ class DatabaseLogger:
                 self.__logger.info(
                     "Connecting consumer (%s) to database at '%s:%i",
                     worker_name,
-                    database_config["hostname"],
-                    database_config["port"],
+                    *database_config.host,
                 )
-                async with self.database_connector(**database_config.model_dump()) as conn:
+                async with self.database_connector(
+                    hostname=database_config.host[0],
+                    port=database_config.host[1],
+                    **database_config.model_dump(exclude={"host"}),
+                ) as conn:
                     self.__logger.info(
                         "Connected consumer (%s) to database at '%s:%i",
                         worker_name,
-                        database_config["hostname"],
-                        database_config["port"],
+                        *database_config.host,
                     )
                     while "queue not done":
                         if item is None:
@@ -330,21 +332,18 @@ class DatabaseLogger:
             ) as exc:
                 self.__logger.error(
                     "Database connection (%s:%i) error: %s. Retrying.",
-                    database_config["hostname"],
-                    database_config["port"],
+                    *database_config.host,
                     exc,
                 )
             except (ConnectionRefusedError, ConnectionResetError):
                 self.__logger.error(
                     "Connection refused by database host (%s:%i). Retrying.",
-                    database_config["hostname"],
-                    database_config["port"],
+                    *database_config.host,
                 )
             except OSError as exc:
                 self.__logger.error(
                     "Socket error while connecting to database (%s:%i): %s. Retrying.",
-                    database_config["hostname"],
-                    database_config["port"],
+                    *database_config.host,
                     exc,
                 )
 
