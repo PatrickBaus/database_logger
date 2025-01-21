@@ -186,14 +186,14 @@ class DatabaseLogger:
 
             try:
                 # Connect to the MQTT broker
-                self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", hostname, port)
+                self.__logger.info("Connecting producer to MQTT broker at '%s:%i'.", hostname, port)
                 async with aiomqtt.Client(
                     hostname=hostname,
                     port=port,
                     **mqtt_config.model_dump(exclude={"hosts"}),
                     clean_session=not bool(mqtt_config.identifier),
                 ) as client:
-                    self.__logger.info("Successfully connected producer to MQTT broker at '%s:%i'", hostname, port)
+                    self.__logger.info("Successfully connected producer to MQTT broker at '%s:%i'.", hostname, port)
                     await client.subscribe("sensors/#", qos=2)
                     async for message in client.messages:
                         # if message.topic.matches("sensors/+/+/+"):
@@ -204,7 +204,7 @@ class DatabaseLogger:
                             await output_queue.put(event)
                         except (json.decoder.JSONDecodeError, TypeError):
                             self.__logger.warning(
-                                "Received invalid message '%s' on channel '%s'", message.payload, message.topic
+                                "Received invalid message '%s' on channel '%s'.", message.payload, message.topic
                             )
             except aiomqtt.MqttCodeError as exc:
                 # The paho mqtt error codes can be found here:
@@ -276,7 +276,7 @@ class DatabaseLogger:
             previous_reconnect_attempt = asyncio.get_running_loop().time()
             try:
                 self.__logger.info(
-                    "Connecting consumer (%s) to database at '%s:%i",
+                    "Connecting consumer (%s) to database at '%s:%i'.",
                     worker_name,
                     *database_config.host,
                 )
@@ -286,7 +286,7 @@ class DatabaseLogger:
                     **database_config.model_dump(exclude={"host"}),
                 ) as conn:
                     self.__logger.info(
-                        "Successfully connected consumer (%s) to database at '%s:%i",
+                        "Successfully connected consumer (%s) to database at '%s:%i'.",
                         worker_name,
                         *database_config.host,
                     )
