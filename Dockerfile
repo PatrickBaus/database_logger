@@ -48,8 +48,7 @@ COPY --from=builder /opt/venv /opt/venv
 # Enable venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY --from=builder /app /app
-RUN chown -R worker:worker /app
+COPY --from=builder --chown=worker:worker /app /app
 
 USER worker
 
