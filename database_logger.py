@@ -201,6 +201,7 @@ class DatabaseLogger:
                     username=username,
                     password=password,
                 ) as client:
+                    self.__logger.info("Connected to MQTT broker at '%s:%i'", hostname, port)
                     await client.subscribe("sensors/#", qos=2)
                     async for message in client.messages:
                         # if message.topic.matches("sensors/+/+/+"):
@@ -219,10 +220,17 @@ class DatabaseLogger:
                 # and here (bottom):
                 # https://github.com/sbtinstruments/aiomqtt/blob/main/aiomqtt/exceptions.py
                 reason_code = exc.rc
-                self.__logger.error(
-                    "PAHO MQTT code error: %s. Reconnecting.",
-                    reason_code,
-                )
+                if reason_code == 7:
+                    self.__logger.error(
+                        "Connection to MQTT server (%s:%i) lost. Reconnecting.",
+                        hostname,
+                        port,
+                    )
+                else:
+                    self.__logger.error(
+                        "PAHO MQTT code error: %s. Reconnecting.",
+                        reason_code,
+                    )
             except ConnectionRefusedError:
                 self.__logger.warning(
                     "Connection refused by MQTT server (%s:%i). Retrying.",
@@ -230,7 +238,7 @@ class DatabaseLogger:
                     port,
                 )
             except aiomqtt.MqttError as exc:
-                error = re.search(r"^\[Errno (\d+)\]", str(exc))
+                error = re.search(r"\[Errno (\d+)]", str(exc))
                 if error is not None:
                     error_code = int(error.group(1))
                     if error_code == 111:
@@ -282,6 +290,12 @@ class DatabaseLogger:
                     database_config["port"],
                 )
                 async with self.database_connector(**database_config) as conn:
+                    self.__logger.info(
+                        "Connected consumer (%s) to database at '%s:%i",
+                        worker_name,
+                        database_config["hostname"],
+                        database_config["port"],
+                    )
                     while "queue not done":
                         if item is None:
                             # only get new data if we have pushed everything to the DB
