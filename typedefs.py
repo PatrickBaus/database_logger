@@ -67,3 +67,48 @@ class MQTTParams(BaseModel):
                 )
             )
         return result
+
+
+class DatabaseParams(BaseModel):
+    """
+    Parameters used to connect to the database.
+
+    Parameters
+    ----------
+    host: Tuple of str and int
+        A tuple host:port. If port number 0 is provided the default value of 5432 is used.
+    username: str or None
+        The username used for authentication. Set to None if no username is required
+    password: str or None
+        The password used for authentication. Set to None if no username is required
+    database: str
+        The database name
+    """
+
+    host: tuple[str, int]
+    username: str | None
+    password: str | None
+    database: str
+
+    @field_validator("host", mode="before")
+    @classmethod
+    def ensure_hostname(cls, value: str) -> tuple[str, int]:
+        """
+        Parse
+        Parameters
+        ----------
+        value: str
+            A single hostname:port string.
+
+        Returns
+        -------
+        list of tuple of str and int
+            A list of (hostname, port) tuples.
+        """
+        match = re.search(HOSTNAME_REGEX, value)
+        if match is None:
+            raise ValueError(f"'{value}' is not a valid hostname.")
+        return (
+            match.group(1),
+            int(match.group(2)) if match.group(2) and not match.group(2) == "0" else 5432,
+        )

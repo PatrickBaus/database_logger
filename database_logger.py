@@ -41,7 +41,7 @@ import asyncpg
 from decouple import UndefinedValueError, config
 
 from _version import __version__
-from typedefs import MQTTParams
+from typedefs import DatabaseParams, MQTTParams
 
 POSTGRES_STMS = {
     "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE"
@@ -245,7 +245,7 @@ class DatabaseLogger:
     async def mqtt_consumer(
         self,
         input_queue: asyncio.Queue[DataEventDict],
-        database_config: dict,
+        database_config: DatabaseParams,
         worker_name: str,
         reconnect_interval: float = 3,
     ) -> None:
@@ -256,7 +256,7 @@ class DatabaseLogger:
         ----------
         input_queue: Queue of DataEventDict
             The event to be inserted into the database
-        database_config: dict
+        database_config: DatabaseParams
             A dictionary containing the database configuration parameters passed on to asyncpg.connect()
         worker_name: str
             A human-readable name for the worker used for logging.
@@ -279,7 +279,7 @@ class DatabaseLogger:
                     database_config["hostname"],
                     database_config["port"],
                 )
-                async with self.database_connector(**database_config) as conn:
+                async with self.database_connector(**database_config.model_dump()) as conn:
                     self.__logger.info(
                         "Connected consumer (%s) to database at '%s:%i",
                         worker_name,
@@ -364,18 +364,17 @@ class DatabaseLogger:
         try:
             mqtt_config = MQTTParams(
                 hosts=config("MQTT_HOST"),
-                client_id=config("MQTT_CLIENT_ID", default=None),
+                identifier=config("MQTT_CLIENT_ID", default=None),
                 username=load_secret("MQTT_CLIENT_USER", default=None),
                 password=load_secret("MQTT_CLIENT_PASSWORD", default=None),
             )
 
-            database_config = {
-                "hostname": config("DATABASE_HOST"),
-                "port": config("DATABASE_PORT", cast=int, default=5432),
-                "username": load_secret("DATABASE_USER"),
-                "password": load_secret("DATABASE_PASSWORD"),
-                "database": config("DATABASE_NAME", default="sensors"),
-            }
+            database_config = DatabaseParams(
+                host=config("DATABASE_HOST"),
+                username=load_secret("DATABASE_USER"),
+                password=load_secret("DATABASE_PASSWORD"),
+                database=config("DATABASE_NAME", default="sensors"),
+            )
         except UndefinedValueError as exc:
             self.__logger.error("Environment variable undefined: %s", exc)
             return
