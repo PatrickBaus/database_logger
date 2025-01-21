@@ -24,6 +24,7 @@ sources, that are configured, into a database.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import re  # Used to parse exceptions
@@ -40,6 +41,7 @@ import asyncpg
 from decouple import UndefinedValueError, config
 
 from _version import __version__
+from typedefs import DatabaseParams, MQTTParams
 
 POSTGRES_STMS = {
     "insert_data": "INSERT INTO sensor_data (time ,sensor_id ,value) VALUES ($1, (SELECT id FROM sensors WHERE"
@@ -152,37 +154,29 @@ class DatabaseLogger:
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     async def mqtt_producer(
         self,
-        hostname: str,
-        port: int,
-        client_id: str | None,
-        username: str | None,
-        password: str | None,
+        mqtt_config: MQTTParams,
         output_queue: asyncio.Queue[DataEventDict],
         reconnect_interval: float = 3,
     ) -> None:
         """
-        The producer connects to the MQTT broker and streams kraken data to be sent to the database.
+        The producer connects to the MQTT broker and streams Kraken data to be sent to the database.
 
         Parameters
         ----------
-        hostname: str
-            The MQTT broker hostname
-        port: int
-            The  MQTT broker port
-        client_id: str
+        mqtt_config: MQTTParams
             The client id used by the data logger to enable MQTT persistence when subscribing to topics. Setting this
             to None will use a random client id and disables persistent messages.
-        username: str
-            The username used for authentication with the MQTT server. Set to None if no username is required.
-        password: str
-            The password used for authentication with the MQTT server. Set to None if no password is required.
+            The username/password is used for authentication with the MQTT server. Set to None if no username is
+            required.
         output_queue: Queue of DataEventDict
             The data read from the MQTT stream
         reconnect_interval: float, default=3
             Time in seconds between connection attempts.
         """
         previous_reconnect_attempt = asyncio.get_running_loop().time() - reconnect_interval
-        while "not connected":
+        for hostname, port in itertools.cycle(
+            mqtt_config.hosts
+        ):  # iterate over the list of hostnames until the end of time
             # Wait for at least reconnect_interval before connecting again
             timeout = self._calculate_timeout(previous_reconnect_attempt, reconnect_interval)
             if timeout > 0:
@@ -194,12 +188,8 @@ class DatabaseLogger:
                 # Connect to the MQTT broker
                 self.__logger.info("Connecting producer to MQTT broker at '%s:%i'", hostname, port)
                 async with aiomqtt.Client(
-                    hostname=hostname,
-                    port=port,
-                    clean_session=not bool(client_id),
-                    identifier=client_id,
-                    username=username,
-                    password=password,
+                    **mqtt_config.model_dump(),
+                    clean_session=not bool(mqtt_config.identifier),
                 ) as client:
                     self.__logger.info("Connected to MQTT broker at '%s:%i'", hostname, port)
                     await client.subscribe("sensors/#", qos=2)
@@ -255,7 +245,7 @@ class DatabaseLogger:
     async def mqtt_consumer(
         self,
         input_queue: asyncio.Queue[DataEventDict],
-        database_config: dict,
+        database_config: DatabaseParams,
         worker_name: str,
         reconnect_interval: float = 3,
     ) -> None:
@@ -266,7 +256,7 @@ class DatabaseLogger:
         ----------
         input_queue: Queue of DataEventDict
             The event to be inserted into the database
-        database_config: dict
+        database_config: DatabaseParams
             A dictionary containing the database configuration parameters passed on to asyncpg.connect()
         worker_name: str
             A human-readable name for the worker used for logging.
@@ -289,7 +279,7 @@ class DatabaseLogger:
                     database_config["hostname"],
                     database_config["port"],
                 )
-                async with self.database_connector(**database_config) as conn:
+                async with self.database_connector(**database_config.model_dump()) as conn:
                     self.__logger.info(
                         "Connected consumer (%s) to database at '%s:%i",
                         worker_name,
@@ -372,32 +362,30 @@ class DatabaseLogger:
 
         # Read either environment variable, settings.ini or .env file
         try:
-            mqtt_config = {
-                "hostname": config("MQTT_HOST"),
-                "port": config("MQTT_PORT", cast=int, default=1883),
-                "client_id": config("MQTT_CLIENT_ID", default=None),
-                "username": load_secret("MQTT_CLIENT_USER", default=None),
-                "password": load_secret("MQTT_CLIENT_PASSWORD", default=None),
-            }
+            mqtt_config = MQTTParams(
+                hosts=config("MQTT_HOST"),
+                identifier=config("MQTT_CLIENT_ID", default=None),
+                username=load_secret("MQTT_CLIENT_USER", default=None),
+                password=load_secret("MQTT_CLIENT_PASSWORD", default=None),
+            )
 
-            database_config = {
-                "hostname": config("DATABASE_HOST"),
-                "port": config("DATABASE_PORT", cast=int, default=5432),
-                "username": load_secret("DATABASE_USER"),
-                "password": load_secret("DATABASE_PASSWORD"),
-                "database": config("DATABASE_NAME", default="sensors"),
-            }
+            database_config = DatabaseParams(
+                host=config("DATABASE_HOST"),
+                username=load_secret("DATABASE_USER"),
+                password=load_secret("DATABASE_PASSWORD"),
+                database=config("DATABASE_NAME", default="sensors"),
+            )
         except UndefinedValueError as exc:
             self.__logger.error("Environment variable undefined: %s", exc)
             return
 
-        if mqtt_config["client_id"] is None:
+        if mqtt_config.client_id is None:
             self.__logger.warning(
                 "No MQTT client id set. Durable queues cannot be enabled. Events will be lost when "
                 "the logger disconnects from the MQTT server."
             )
         else:
-            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_config["client_id"])
+            self.__logger.info("MQTT persistence enabled. Using unique client id: '%s'.", mqtt_config.client_id)
 
         async with asyncio.TaskGroup() as task_group:
             message_queue: asyncio.Queue[DataEventDict] = asyncio.Queue()
@@ -408,7 +396,7 @@ class DatabaseLogger:
                 )
 
             # Start the MQTT producer
-            task_group.create_task(self.mqtt_producer(output_queue=message_queue, **mqtt_config))
+            task_group.create_task(self.mqtt_producer(output_queue=message_queue, mqtt_config=mqtt_config))
 
     async def shutdown(self):
         """
