@@ -22,7 +22,7 @@ classifiers = [
 ]
 keywords = ["IoT",]
 dependencies = [
-    "aiomqtt ~= 2.3.0",
+    "aiomqtt ~= 2.4.0",
     "asyncpg ~= 0.30.0",
     "python-decouple ~= 3.8",
     "pydantic ~= 2.11.1",
