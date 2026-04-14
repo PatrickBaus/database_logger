@@ -35,15 +35,6 @@ dynamic = ["version"]
 "Bug Tracker" = "https://github.com/PatrickBaus/database_logger/issues"
 "Download" = "https://github.com/PatrickBaus/database_logger/releases"
 
-[project.optional-dependencies]
-dev = [
-    "black", "build", "isort", "mypy", "pre-commit", "pylint", "pytest"
-]
-
-test = [
-    "mypy", "pylint", "pytest"
-]
-
 [tool.pylint.'MESSAGES CONTROL']
 max-line-length = 120
 
@@ -71,6 +62,25 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = []
+
+[dependency-groups]
+dev = [
+    "black~=26.3.1",
+    "build~=1.4.3",
+    "isort~=8.0.1",
+    "pre_commit~=4.5.1",
+    "types-simplejson~=3.20.0.20260408",
+    {include-group = "lint"},
+    {include-group = "test"},
+]
+lint = [
+    "pylint~=4.0.5",
+    "pylint-pydantic~=0.4.1",
+]
+test = [
+    "mypy~=1.20.1",
+    "pytest~=9.0.3",
+]
 
 [tool.setuptools.dynamic]
 version = {attr = "_version.__version__"}
