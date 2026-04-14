@@ -21,6 +21,7 @@
 This is a demo logger for the Kraken sensor system. It connects to the MQTT broker and pushes all data from data
 sources, that are configured, into a database.
 """
+
 from __future__ import annotations
 
 import asyncio
