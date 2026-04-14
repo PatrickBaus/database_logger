@@ -28,7 +28,7 @@ jobs:
     - name: Install dependencies for testing
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install .[test]
+        python3 -m pip install --group lint
     - name: Run Pylint
       run: |
         # stop the build if there are Python syntax errors or undefined names
