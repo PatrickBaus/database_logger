@@ -65,7 +65,7 @@ py-modules = []
 
 [dependency-groups]
 dev = [
-    "black~=26.3.1",
+    "black>=26.3.1,<26.6.0",
     "build>=1.4.3,<1.6.0",
     "isort~=8.0.1",
     "pre_commit>=4.5.1,<4.7.0",
