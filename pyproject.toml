@@ -75,7 +75,7 @@ dev = [
 ]
 lint = [
     "mypy>=1.20.1,<2.4.0",
-    "pylint~=4.0.5",
+    "pylint>=4.0.5,<4.2.0",
     "pylint-pydantic~=0.4.1",
 ]
 test = [
