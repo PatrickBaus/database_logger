@@ -26,7 +26,7 @@ dependencies = [
     "aiomqtt ~= 2.5.1",
     "asyncpg >= 0.31,< 0.33",
     "python-decouple ~= 3.8",
-    "pydantic >= 2.12,< 2.14",
+    "pydantic >= 2.12,< 2.15",
 ]
 dynamic = ["version"]
 
